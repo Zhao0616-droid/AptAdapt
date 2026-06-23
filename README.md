@@ -178,9 +178,9 @@ AptAdapt/
 
 | 成员 | 角色 | 职责 |
 | --- | --- | --- |
-| 赵嘉诚 | 组长 / 后端 | FastAPI、JWT、讯飞 API、Chroma 知识库、项目协调 |
-| 徐英博 | 多智能体 | LangGraph、Agent 编排、Prompt 模板、路径规划、测试 |
-| 胡博涵 | 前端 / 演示 | Vue3、可视化组件、演示视频、PPT |
+| 赵嘉诚 | 组长 / 多智能体 | LangGraph、Agent 编排、Prompt 模板、路径规划、测试 |
+| 胡博涵 | 后端 | FastAPI、JWT、讯飞 API、Chroma 知识库、项目协调 |
+| 徐英博 | 前端 / 演示 | Vue3、可视化组件、演示视频、PPT |
 
 ## 开发周期
 
