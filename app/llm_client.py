@@ -1,6 +1,7 @@
 """讯飞星火 Chat API WebSocket 客户端 — 支持普通调用与流式输出"""
 import websocket
 import hashlib
+import hmac
 import base64
 import json
 import time
@@ -18,8 +19,8 @@ class SparkLLM:
         self.APPID = XFYUN_APPID
         self.API_KEY = XFYUN_API_KEY
         self.API_SECRET = XFYUN_API_SECRET
-        self.Host = "spark-api-open.xf-yun.com"
-        self.Path = "/v1/chat/completions"
+        self.Host = "spark-api.xf-yun.com"
+        self.Path = "/v3.5/chat"
         self.URL = f"wss://{self.Host}{self.Path}"
 
     def _build_url(self) -> str:
@@ -28,7 +29,11 @@ class SparkLLM:
         date = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(now))
 
         signature_origin = f"host: {self.Host}\ndate: {date}\nGET {self.Path} HTTP/1.1"
-        signature_sha = hashlib.sha256(signature_origin.encode("utf-8")).digest()
+        signature_sha = hmac.new(
+            self.API_SECRET.encode("utf-8"),
+            signature_origin.encode("utf-8"),
+            hashlib.sha256,
+        ).digest()
         signature = base64.b64encode(signature_sha).decode()
 
         authorization_origin = (
@@ -75,7 +80,7 @@ class SparkLLM:
                 if res["header"]["status"] == 2:
                     break
                 choices = res["payload"]["choices"]
-                if choices and "text" in choices["text"][0]:
+                if choices and "content" in choices["text"][0]:
                     full_response += choices["text"][0]["content"]
         except Exception as e:
             print(f"接收消息出错: {e}")
@@ -103,7 +108,7 @@ class SparkLLM:
                 if res["header"]["status"] == 2:
                     break
                 choices = res["payload"]["choices"]
-                if choices and "text" in choices["text"][0]:
+                if choices and "content" in choices["text"][0]:
                     content = choices["text"][0]["content"]
                     yield content
         except Exception as e:
