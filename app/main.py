@@ -1,15 +1,29 @@
-# backend/app/main.py
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from .database import engine, Base
-from .routers import auth, chat  # <--- 这里加上 , chat
+from .routers import auth, chat, profile, resource, health, course
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="中国软件杯 A3 项目后端", version="1.0.0")
+app = FastAPI(title="AptAdapt — 个性化学习智能体", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(auth.router)
-app.include_router(chat.router) # <--- 这里也要加上
+app.include_router(chat.router)
+app.include_router(profile.router)
+app.include_router(resource.router)
+app.include_router(health.router)
+app.include_router(course.router)
+
 
 @app.get("/")
 def root():
-    return {"message": "后端服务已启动"}
+    return {"message": "AptAdapt 后端服务已启动"}

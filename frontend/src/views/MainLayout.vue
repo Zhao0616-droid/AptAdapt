@@ -1,9 +1,32 @@
 <template>
   <div class="workspace">
-    <!-- 左侧: 学习路径树 -->
+    <!-- 左侧: 课程选择 + 学习路径 -->
     <aside class="sidebar-left">
       <div class="sidebar-header">
         <h2>AptAdapt</h2>
+      </div>
+      <!-- 课程选择器 -->
+      <div class="course-selector">
+        <el-select
+          v-model="courseStore.currentId"
+          placeholder="选择课程"
+          @change="handleCourseChange"
+          size="large"
+          style="width:100%"
+        >
+          <el-option
+            v-for="c in courseStore.courses"
+            :key="c.id"
+            :label="c.name"
+            :value="c.id"
+          >
+            <span style="float:left">{{ c.name }}</span>
+            <span style="float:right;color:#909399;font-size:13px">{{ c.chapters?.length || 0 }} 章</span>
+          </el-option>
+        </el-select>
+      </div>
+      <div class="course-info" v-if="courseStore.currentCourse">
+        <p class="course-desc">{{ courseStore.currentCourse.description }}</p>
       </div>
       <PathTree />
     </aside>
@@ -36,7 +59,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useCourseStore } from '../stores/course'
 import ChatPanel from '../components/ChatPanel.vue'
 import PathTree from '../components/PathTree.vue'
 import ResourcePanel from '../components/ResourcePanel.vue'
@@ -44,13 +68,22 @@ import ProfileCard from '../components/ProfileCard.vue'
 import EvaluationPanel from '../components/EvaluationPanel.vue'
 import AgentStatusBar from '../components/AgentStatusBar.vue'
 
+const courseStore = useCourseStore()
 const activeTab = ref('resources')
+
+function handleCourseChange(courseId) {
+  courseStore.switchCourse(courseId)
+}
+
+onMounted(() => {
+  courseStore.loadCourses()
+})
 </script>
 
 <style scoped>
 .workspace {
   display: grid;
-  grid-template-columns: 260px 1fr 320px;
+  grid-template-columns: 280px 1fr 340px;
   grid-template-rows: 1fr 36px;
   height: 100vh;
   overflow: hidden;
@@ -61,12 +94,23 @@ const activeTab = ref('resources')
   overflow-y: auto;
 }
 .sidebar-header {
-  padding: 16px;
-  border-bottom: 1px solid #e4e7ed;
+  padding: 16px 16px 0;
 }
 .sidebar-header h2 {
   font-size: 18px;
   color: #303133;
+}
+.course-selector {
+  padding: 12px 16px;
+}
+.course-info {
+  padding: 0 16px 8px;
+}
+.course-desc {
+  font-size: 12px;
+  color: #909399;
+  margin: 0;
+  line-height: 1.5;
 }
 .main-content {
   display: flex;

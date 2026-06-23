@@ -11,8 +11,8 @@
       <div class="card-body">
         <MarkdownViewer v-if="res.type === 'doc'" :content="res.content" />
         <MindMapViewer v-else-if="res.type === 'mindmap'" :data="res.content" />
-        <QuizCard v-else-if="res.type === 'quiz'" :quiz="res.content" />
-        <CodeBlock v-else-if="res.type === 'code'" :code="res.content" />
+        <QuizCard v-else-if="res.type === 'quiz'" :quiz="parsedContent(res)" />
+        <CodeBlock v-else-if="res.type === 'code'" :code="parsedContent(res)" />
         <MarkdownViewer v-else :content="res.content" />
       </div>
     </div>
@@ -27,6 +27,18 @@ import QuizCard from './QuizCard.vue'
 import CodeBlock from './CodeBlock.vue'
 
 const resources = ref([])
+
+function parsedContent(res) {
+  // quiz 和 code 的 content 是 JSON 字符串，需要转为对象
+  if ((res.type === 'quiz' || res.type === 'code') && typeof res.content === 'string') {
+    try {
+      return JSON.parse(res.content)
+    } catch {
+      return res.content
+    }
+  }
+  return res.content
+}
 
 function tagType(type) {
   const map = { doc: 'success', mindmap: 'warning', quiz: 'danger', code: '', video_script: 'info' }

@@ -10,14 +10,34 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import hljs from 'highlight.js/lib/core'
+import verilog from 'highlight.js/lib/languages/verilog'
+import asm from 'highlight.js/lib/languages/x86asm'
+import python from 'highlight.js/lib/languages/python'
+import c from 'highlight.js/lib/languages/c'
 import 'highlight.js/styles/github.css'
+
+hljs.registerLanguage('verilog', verilog)
+hljs.registerLanguage('x86asm', asm)
+hljs.registerLanguage('python', python)
+hljs.registerLanguage('c', c)
 
 const props = defineProps({
   code: { type: Object, default: () => ({ language: '', source: '', explanation: '' }) }
 })
 const codeEl = ref(null)
+
+function highlight() {
+  if (codeEl.value) {
+    codeEl.value.removeAttribute('data-highlighted')
+    codeEl.value.className = `hljs language-${props.code.language || 'verilog'}`
+    hljs.highlightElement(codeEl.value)
+  }
+}
+
+onMounted(highlight)
+watch(() => props.code.source, highlight)
 
 function copy() {
   navigator.clipboard.writeText(props.code.source || '')

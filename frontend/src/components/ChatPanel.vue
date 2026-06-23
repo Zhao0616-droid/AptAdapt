@@ -27,9 +27,11 @@
 
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
+import { useCourseStore } from '../stores/course'
 import markdownit from 'markdown-it'
 
 const md = markdownit()
+const courseStore = useCourseStore()
 const messages = ref([])
 const input = ref('')
 const streamContent = ref('')
@@ -60,7 +62,7 @@ async function send() {
   // TODO: 接入 SSE 流式接口
   try {
     const { sendMessage } = await import('../api/chat')
-    const res = await sendMessage(userMsg)
+    const res = await sendMessage(userMsg, courseStore.currentId)
     streamContent.value = res.data.data.reply
     messages.value.push({ role: 'assistant', content: streamContent.value })
   } catch (e) {
@@ -75,7 +77,7 @@ async function send() {
 onMounted(() => {
   messages.value.push({
     role: 'assistant',
-    content: '你好！我是《计算机组成原理》学习助手。请告诉我你的学习情况，我会为你生成个性化的学习资源。比如：你是什么专业、哪些知识点比较薄弱、偏好什么样的学习方式？'
+    content: '你好！我是AptAdapt学习助手，请先在上方选择课程。请告诉我你的学习情况，我会为你生成个性化的学习资源。比如：你是什么专业、哪些知识点比较薄弱、偏好什么样的学习方式？'
   })
 })
 </script>
