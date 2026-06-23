@@ -6,7 +6,7 @@ import json
 import time
 import ssl
 from urllib.parse import urlencode
-from ..config import XFYUN_APPID, XFYUN_API_KEY, XFYUN_API_SECRET
+from .config import XFYUN_APPID, XFYUN_API_KEY, XFYUN_API_SECRET
 
 class SparkLLM:
     def __init__(self):

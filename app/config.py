@@ -1,6 +1,12 @@
-# backend/config.py
+# 讯飞开放平台 API 密钥
+XFYUN_APPID = "d67c6e24"
+XFYUN_API_KEY = "8f20f75aa0a3e936d835581f83928c66"
+XFYUN_API_SECRET = "NTkzNDQ4NDZiYzA4ODM0MTkwMTY0MzNk"
 
-# 从讯飞开放平台复制过来的密钥
-XFYUN_APPID = "d67c6e24"          # 例如: d67c6e24
-XFYUN_API_KEY = "8f20f75aa0a3e936d835581f83928c66"      # 例如: 8f20f75aa0a3e9368835581f83928c66
-XFYUN_API_SECRET = "NTkzNDQ4NDZiYzA4ODM0MTkwMTY0MzNk" # 例如: NTkzNDQ4NDYzYjA4ODM0MTkwMTY0MzNk
+# 数据库
+DATABASE_URL = "sqlite:///./aptadapt.db"
+
+# JWT 配置
+SECRET_KEY = "aptadapt-secret-key-change-in-production"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 小时
