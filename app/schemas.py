@@ -46,6 +46,7 @@ class StudentProfile(BaseModel):
     learning_preference: List[str] = Field(default_factory=list)
     pace: Optional[str] = None
     resource_preference: List[str] = Field(default_factory=list)
+    mastery: Optional[dict] = Field(default_factory=dict)  # 各知识点掌握度，如 {"Cache 映射方式": 0.6}
 
 
 class ProfileResponse(BaseModel):

@@ -1,4 +1,5 @@
 """课程注册表 — 定义可切换的多门课程"""
+from typing import Optional
 COURSES = [
     {
         "id": "computer_organization",
@@ -54,7 +55,7 @@ COURSES = [
 DEFAULT_COURSE = "computer_organization"
 
 
-def get_course(course_id: str) -> dict | None:
+def get_course(course_id: str) -> Optional[dict]:
     for c in COURSES:
         if c["id"] == course_id:
             return c

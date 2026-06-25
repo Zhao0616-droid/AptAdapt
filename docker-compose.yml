@@ -5,14 +5,16 @@ services:
       dockerfile: Dockerfile.backend
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     volumes:
       - ./app:/app/app
       - ./agents:/app/agents
       - ./knowledge_base:/app/knowledge_base
       - ./scripts:/app/scripts
-      - db_data:/app  # SQLite & Chroma 持久化
+      - db_data:/app/data
     environment:
-      - DATABASE_URL=sqlite:///./aptadapt.db
+      - DATABASE_URL=sqlite:///./data/aptadapt.db
     restart: unless-stopped
 
   frontend:

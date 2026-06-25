@@ -116,3 +116,10 @@ if __name__ == "__main__":
     vec = client.embed_single("计算机组成原理是计算机科学与技术专业的核心课程")
     print(f"向量维度: {len(vec)}")
     print(f"前 5 维: {vec[:5]}")
+
+
+# ── Mock 模式切换（开发/演示无需调用 Embedding API） ──
+import os  # noqa: E402
+
+if os.getenv("USE_MOCK_EMBEDDING", "0") == "1":
+    from .embedding_client_mock import MockEmbeddingClient as EmbeddingClient  # noqa: F811
