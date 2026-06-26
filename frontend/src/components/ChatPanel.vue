@@ -145,7 +145,7 @@ onMounted(() => {
 }
 
 .chat-messages {
-  min-height: 150px;
+  min-height: 240px;
   overflow-y: auto;
   padding: 18px;
 }

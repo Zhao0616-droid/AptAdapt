@@ -62,6 +62,8 @@ onMounted(() => {
 <style scoped>
 .evaluation-panel {
   padding: 18px;
+  display: grid;
+  gap: 18px;
 }
 
 .panel-head {
@@ -82,19 +84,22 @@ onMounted(() => {
 
 .chart {
   width: 100%;
-  height: 220px;
+  height: 360px;
 }
 
 .metric-list {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
 .metric-list div {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-top: 1px solid rgba(89, 128, 176, 0.12);
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(89, 128, 176, 0.12);
+  background: rgba(255, 255, 255, 0.68);
 }
 
 .metric-list span {
@@ -104,5 +109,16 @@ onMounted(() => {
 
 .metric-list b {
   color: var(--aa-green);
+  font-size: 24px;
+}
+
+@media (max-width: 760px) {
+  .metric-list {
+    grid-template-columns: 1fr;
+  }
+
+  .chart {
+    height: 300px;
+  }
 }
 </style>

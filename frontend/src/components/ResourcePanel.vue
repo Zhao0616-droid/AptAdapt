@@ -131,6 +131,7 @@ function iconLabel(type) {
 
 .resource-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -181,11 +182,37 @@ function iconLabel(type) {
 }
 
 .resource-detail {
-  max-height: 360px;
+  min-height: 340px;
+  max-height: 520px;
   overflow: auto;
   padding: 14px;
   border-radius: 8px;
   border: 1px solid rgba(89, 128, 176, 0.12);
   background: rgba(255, 255, 255, 0.68);
+}
+
+@media (min-width: 1180px) {
+  .resource-panel {
+    grid-template-columns: 0.9fr 1.1fr;
+    align-items: start;
+  }
+
+  .panel-head {
+    grid-column: 1 / -1;
+  }
+
+  .resource-list {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-detail {
+    min-height: 470px;
+  }
+}
+
+@media (max-width: 760px) {
+  .resource-list {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
