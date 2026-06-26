@@ -5,11 +5,16 @@
         <p class="aa-kicker">Learning Path</p>
         <h2 class="aa-title">个性化路径</h2>
       </div>
-      <strong>68%</strong>
+      <strong>{{ progress }}%</strong>
+    </div>
+
+    <div class="sync-row">
+      <p>{{ sourceLabel }}</p>
+      <el-button size="small" @click="loadPath" :loading="loading">同步后端路径</el-button>
     </div>
 
     <ol class="timeline">
-      <li v-for="node in pathNodes" :key="node.title" :class="node.status">
+      <li v-for="node in displayNodes" :key="node.id || node.title" :class="node.status">
         <span></span>
         <div>
           <b>{{ node.title }}</b>
@@ -21,13 +26,74 @@
 </template>
 
 <script setup>
-const pathNodes = [
-  { title: '冯·诺依曼结构', desc: '系统结构和指令流基础', status: 'done' },
-  { title: '数据表示与 ALU', desc: '补齐定点数、浮点数与运算器', status: 'done' },
-  { title: 'Cache 映射方式', desc: '重点突破直接映射、组相联', status: 'active' },
-  { title: '流水线冲突', desc: '结构、数据与控制相关', status: 'pending' },
-  { title: '中断与 DMA', desc: '理解 I/O 协作机制', status: 'pending' }
+import { computed, ref } from 'vue'
+import { useCourseStore } from '../stores/course'
+import { getLearningPath } from '../api/path'
+
+const courseStore = useCourseStore()
+const loading = ref(false)
+const error = ref('')
+const remoteNodes = ref([])
+
+const fallbackNodes = [
+  { id: 'von_neumann', title: '冯·诺依曼结构', desc: '系统结构和指令流基础', status: 'done' },
+  { id: 'data_alu', title: '数据表示与 ALU', desc: '补齐定点数、浮点数与运算器', status: 'done' },
+  { id: 'cache_mapping', title: 'Cache 映射方式', desc: '重点突破直接映射、组相联', status: 'active' },
+  { id: 'pipeline_hazard', title: '流水线冲突', desc: '结构、数据与控制相关', status: 'pending' },
+  { id: 'interrupt_dma', title: '中断与 DMA', desc: '理解 I/O 协作机制', status: 'pending' }
 ]
+
+const displayNodes = computed(() => remoteNodes.value.length ? remoteNodes.value : fallbackNodes)
+
+const progress = computed(() => {
+  const nodes = displayNodes.value
+  if (!nodes.length) return 0
+  const completed = nodes.filter(node => node.status === 'done').length
+  const activeBonus = nodes.some(node => node.status === 'active') ? 0.5 : 0
+  return Math.round(((completed + activeBonus) / nodes.length) * 100)
+})
+
+const sourceLabel = computed(() => {
+  if (loading.value) return '正在同步后端学习路径...'
+  if (error.value) return '后端暂不可用，当前展示演示路径'
+  return remoteNodes.value.length ? '已接入后端个性化路径接口' : '演示路径'
+})
+
+function normalizePath(path = []) {
+  const firstHighIndex = path.findIndex(node => node.priority === 'high')
+  return path.map((node, index) => {
+    let status = 'pending'
+    if (node.priority === 'high' && (firstHighIndex === -1 || index === firstHighIndex)) {
+      status = 'active'
+    } else if (index < Math.max(firstHighIndex, 0)) {
+      status = 'done'
+    }
+
+    return {
+      id: node.id || node.title,
+      title: node.title || node.id || '未命名知识点',
+      desc: node.note || [
+        node.chapter ? `第 ${node.chapter} 章` : '',
+        node.difficulty ? `难度：${node.difficulty}` : ''
+      ].filter(Boolean).join(' · ') || '按课程知识图谱推荐学习',
+      status
+    }
+  })
+}
+
+async function loadPath() {
+  loading.value = true
+  error.value = ''
+  try {
+    const res = await getLearningPath('demo_user', courseStore.currentId || 'computer_organization')
+    remoteNodes.value = normalizePath(res.data?.path || [])
+  } catch (e) {
+    error.value = e.message || 'load path failed'
+    remoteNodes.value = []
+  } finally {
+    loading.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -45,6 +111,20 @@ const pathNodes = [
 .section-title strong {
   color: var(--aa-green);
   font-size: 22px;
+}
+
+.sync-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.sync-row p {
+  margin: 0;
+  color: var(--aa-muted);
+  font-size: 12px;
 }
 
 .timeline {

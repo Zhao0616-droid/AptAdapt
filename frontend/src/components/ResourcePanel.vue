@@ -5,7 +5,12 @@
         <p class="aa-kicker">Resource Factory</p>
         <h2 class="aa-title">生成资源</h2>
       </div>
-      <span>{{ resources.length }} 类</span>
+      <div class="panel-actions">
+        <span>{{ statusText }}</span>
+        <el-button type="primary" size="small" @click="loadGeneratedResources" :loading="loading">
+          调用后端生成
+        </el-button>
+      </div>
     </div>
 
     <div class="resource-list">
@@ -24,7 +29,10 @@
     </div>
 
     <div class="resource-detail">
-      <MarkdownViewer v-if="activeResource.type === 'doc' || activeResource.type === 'video_script'" :content="activeResource.content" />
+      <MarkdownViewer
+        v-if="activeResource.type === 'doc' || activeResource.type === 'video_script'"
+        :content="activeResource.content"
+      />
       <MindMapViewer v-else-if="activeResource.type === 'mindmap'" :data="activeResource.content" />
       <QuizCard v-else-if="activeResource.type === 'quiz'" :quiz="activeResource.content" />
       <CodeBlock v-else-if="activeResource.type === 'code'" :code="activeResource.content" />
@@ -34,12 +42,15 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { generateResource } from '../api/resource'
 import MarkdownViewer from './MarkdownViewer.vue'
 import MindMapViewer from './MindMapViewer.vue'
 import QuizCard from './QuizCard.vue'
 import CodeBlock from './CodeBlock.vue'
 
 const activeIndex = ref(0)
+const loading = ref(false)
+const error = ref('')
 const resources = ref([
   {
     type: 'doc',
@@ -74,6 +85,9 @@ Cache 映射方式解决的问题是：**主存块应该放到 Cache 的哪个�
     title: '分层练习题',
     summary: '基础题 3 道，进阶计算题 2 道，附解析。',
     content: {
+      id: 'demo_cache_mapping_1',
+      knowledge_point: 'Cache 映射方式',
+      difficulty: 'medium',
       question: '某 Cache 采用直接映射，主存块号为 29，Cache 共有 8 行，该主存块映射到第几行？',
       options: ['1', '5', '6', '7'],
       answer: 1,
@@ -105,10 +119,54 @@ Cache 映射方式解决的问题是：**主存块应该放到 Cache 的哪个�
 ])
 
 const activeResource = computed(() => resources.value[activeIndex.value])
+const statusText = computed(() => {
+  if (loading.value) return '生成中'
+  if (error.value) return '演示资源'
+  return `${resources.value.length} 类`
+})
 
 function iconLabel(type) {
   const map = { doc: 'DOC', mindmap: 'MAP', quiz: 'QZ', code: 'ASM', video_script: 'VID' }
   return map[type] || 'AI'
+}
+
+function parseContent(item) {
+  if (item.type !== 'quiz' && item.type !== 'code') return item.content
+  if (typeof item.content !== 'string') return item.content
+  try {
+    return JSON.parse(item.content)
+  } catch {
+    return item.content
+  }
+}
+
+function normalizeResource(item) {
+  return {
+    type: item.type,
+    title: item.title || iconLabel(item.type),
+    summary: item.summary || '由后端资源智能体生成',
+    content: parseContent(item)
+  }
+}
+
+async function loadGeneratedResources() {
+  loading.value = true
+  error.value = ''
+  try {
+    const res = await generateResource(
+      'Cache 映射方式',
+      ['doc', 'mindmap', 'quiz', 'code', 'video_script']
+    )
+    const remoteResources = res.data?.resources || []
+    if (remoteResources.length) {
+      resources.value = remoteResources.map(normalizeResource)
+      activeIndex.value = 0
+    }
+  } catch (e) {
+    error.value = e.message || 'generate resource failed'
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -122,11 +180,18 @@ function iconLabel(type) {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 14px;
 }
 
 .panel-head span {
   color: var(--aa-muted);
   font-size: 14px;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .resource-list {
@@ -211,6 +276,12 @@ function iconLabel(type) {
 }
 
 @media (max-width: 760px) {
+  .panel-head,
+  .panel-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .resource-list {
     grid-template-columns: 1fr;
   }

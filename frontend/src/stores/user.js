@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { login as loginApi } from '../api/auth'
-import { getProfile } from '../api/chat'
+import { getProfile } from '../api/profile'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem('token') || '')
@@ -17,7 +17,7 @@ export const useUserStore = defineStore('user', () => {
 
   async function fetchProfile() {
     const res = await getProfile()
-    profile.value = res.data
+    profile.value = res.data?.profile || null
   }
 
   function logout() {

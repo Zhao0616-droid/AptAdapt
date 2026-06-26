@@ -163,7 +163,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useCourseStore } from '../stores/course'
 import ChatPanel from '../components/ChatPanel.vue'
 import PathTree from '../components/PathTree.vue'
@@ -247,9 +247,6 @@ function handleCourseChange(courseId) {
   courseStore.switchCourse(courseId)
 }
 
-onMounted(() => {
-  courseStore.loadCourses()
-})
 </script>
 
 <style scoped>

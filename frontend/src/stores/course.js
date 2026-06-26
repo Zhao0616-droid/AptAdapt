@@ -1,9 +1,18 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 import { fetchCourses } from '../api/course'
 
+const fallbackCourses = [
+  {
+    id: 'computer_organization',
+    name: '计算机组成原理',
+    description: '围绕计算机组成原理构建个性化资源生成闭环。',
+    chapters: []
+  }
+]
+
 export const useCourseStore = defineStore('course', () => {
-  const courses = ref([])
+  const courses = ref([...fallbackCourses])
   const currentId = ref(localStorage.getItem('currentCourse') || 'computer_organization')
   const loaded = ref(false)
 
@@ -15,14 +24,14 @@ export const useCourseStore = defineStore('course', () => {
     if (loaded.value && courses.value.length > 0) return
     try {
       const res = await fetchCourses()
-      courses.value = res.data.courses || []
+      courses.value = res.data.courses?.length ? res.data.courses : [...fallbackCourses]
       loaded.value = true
-      // 如果当前课程不在列表中，切到默认
       if (!courses.value.find(c => c.id === currentId.value)) {
         currentId.value = res.data.default || courses.value[0]?.id
       }
-    } catch (e) {
-      console.error('加载课程列表失败:', e)
+    } catch {
+      courses.value = [...fallbackCourses]
+      loaded.value = false
     }
   }
 
