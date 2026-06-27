@@ -7,7 +7,7 @@
       </div>
       <div class="panel-actions">
         <span>{{ statusText }}</span>
-        <el-button type="primary" size="small" @click="loadGeneratedResources" :loading="loading">
+        <el-button type="primary" size="small" @click="loadGeneratedResources" :loading="loading" :disabled="loading">
           调用后端生成
         </el-button>
       </div>
@@ -29,8 +29,12 @@
     </div>
 
     <div class="resource-detail">
+      <div v-if="!activeResource" class="resource-empty">
+        <b>等待生成资源</b>
+        <p>点击“调用后端生成”后，会展示文档、导图、练习题、代码示例和视频脚本。</p>
+      </div>
       <MarkdownViewer
-        v-if="activeResource.type === 'doc' || activeResource.type === 'video_script'"
+        v-else-if="activeResource.type === 'doc' || activeResource.type === 'video_script'"
         :content="activeResource.content"
       />
       <MindMapViewer v-else-if="activeResource.type === 'mindmap'" :data="activeResource.content" />
@@ -43,6 +47,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useCourseStore } from '../stores/course'
+import { useWorkspaceStore } from '../stores/workspace'
 import { generateResource } from '../api/resource'
 import MarkdownViewer from './MarkdownViewer.vue'
 import MindMapViewer from './MindMapViewer.vue'
@@ -50,16 +55,39 @@ import QuizCard from './QuizCard.vue'
 import CodeBlock from './CodeBlock.vue'
 
 const courseStore = useCourseStore()
+const workspaceStore = useWorkspaceStore()
 const activeIndex = ref(0)
 const loading = ref(false)
 const error = ref('')
-const resources = ref([])
+const demoResources = [
+  {
+    type: 'doc',
+    title: 'Cache 映射方式讲解',
+    summary: '演示资源：对直接映射、全相联和组相联进行对比。',
+    content: '## Cache 映射方式\n\n直接映射速度快但冲突多；全相联冲突少但硬件复杂；组相联在两者之间折中。'
+  },
+  {
+    type: 'quiz',
+    title: 'Cache 映射练习',
+    summary: '演示资源：完成后可提交到后端更新画像。',
+    content: {
+      question: '主存块只能映射到 Cache 中唯一一个位置的是哪种方式？',
+      options: ['直接映射', '全相联映射', '组相联映射', '随机映射'],
+      answer: 0,
+      explanation: '直接映射中，主存块号通过取模确定唯一 Cache 行。'
+    }
+  }
+]
+const localResources = ref([...demoResources])
+const localSource = ref('demo')
 
+const resources = computed(() => workspaceStore.resources.length ? workspaceStore.resources : localResources.value)
+const source = computed(() => workspaceStore.resources.length ? workspaceStore.source : localSource.value)
 const activeResource = computed(() => resources.value[activeIndex.value])
 const statusText = computed(() => {
   if (loading.value) return '生成中'
-  if (error.value) return '生成失败'
-  return resources.value.length ? `${resources.value.length} 类` : '待生成'
+  if (error.value) return '演示资源'
+  return source.value === 'remote' ? `${resources.value.length} 类后端资源` : `${resources.value.length} 类演示资源`
 })
 
 function iconLabel(type) {
@@ -87,6 +115,7 @@ function normalizeResource(item) {
 }
 
 async function loadGeneratedResources() {
+  if (loading.value) return
   loading.value = true
   error.value = ''
   try {
@@ -96,11 +125,15 @@ async function loadGeneratedResources() {
     )
     const remoteResources = res.data?.resources || []
     if (remoteResources.length) {
-      resources.value = remoteResources.map(normalizeResource)
+      const normalized = remoteResources.map(normalizeResource)
+      localResources.value = normalized
+      workspaceStore.setResources(normalized, 'remote')
       activeIndex.value = 0
+      localSource.value = 'remote'
     }
   } catch (e) {
     error.value = e.message || 'generate resource failed'
+    localSource.value = 'demo'
   } finally {
     loading.value = false
   }
@@ -191,6 +224,26 @@ async function loadGeneratedResources() {
   border-radius: 8px;
   border: 1px solid rgba(89, 128, 176, 0.12);
   background: rgba(255, 255, 255, 0.68);
+}
+
+.resource-empty {
+  min-height: 260px;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--aa-muted);
+}
+
+.resource-empty b {
+  color: var(--aa-text);
+  font-size: 16px;
+}
+
+.resource-empty p {
+  max-width: 360px;
+  margin: 0;
+  line-height: 1.7;
 }
 
 @media (min-width: 1180px) {

@@ -50,10 +50,14 @@
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
 import { useCourseStore } from '../stores/course'
+import { useUserStore } from '../stores/user'
+import { useWorkspaceStore } from '../stores/workspace'
 import markdownit from 'markdown-it'
 
 const md = markdownit()
 const courseStore = useCourseStore()
+const userStore = useUserStore()
+const workspaceStore = useWorkspaceStore()
 const messages = ref([])
 const input = ref('帮我生成 Cache 直接映射、全相联、组相联的学习资源')
 const streamContent = ref('')
@@ -76,14 +80,18 @@ function fillPrompt(text) {
 }
 
 function formatResponse(apiData) {
-  if (!apiData) return mockReply('')
+  if (!apiData) return '后端没有返回有效结果，请稍后重试。'
   const resources = apiData.resources || []
   const review = apiData.review || {}
   const taskType = apiData.task_type || ''
+  const agentText = apiData.agent_sequence?.length
+    ? `\n\n**智能体流程**：${apiData.agent_sequence.join(' → ')}`
+    : ''
 
   const doc = resources.find(r => r.type === 'doc')
   if (doc && doc.content) {
     let text = doc.content
+    text += agentText
     if (review.notes && review.notes.length) {
       text += '\n\n---\n**审核反馈**：' + review.notes.map(n => '\n- ' + n).join('')
     }
@@ -92,23 +100,26 @@ function formatResponse(apiData) {
 
   if (resources.length) {
     const names = resources.map(r => '- **' + (r.title || r.type) + '**').join('\n')
-    return '## 已生成以下学习资源\n\n' + names + '\n\n' + (review.passed ? '审核通过' : '审核未通过')
+    return '## 已生成以下学习资源\n\n' + names + agentText + '\n\n' + (review.passed ? '审核通过' : '审核未通过')
   }
 
   if (taskType === 'profile') return '画像已更新。你可以继续描述学习情况，或直接提问知识点。'
   if (taskType === 'path' || taskType === 'planner') return '学习路径已规划完成，请在右侧面板查看。'
-  return mockReply('')
+  if (apiData.error) {
+    return `本次智能体流程已停止：${apiData.error}\n\n请切换到资源工厂重新生成，或缩短问题范围后再试。`
+  }
+  return '本次智能体流程已完成，但没有生成资源。你可以尝试明确说明要生成“讲解文档、练习题、思维导图或代码案例”。'
 }
 
-function mockReply(userMsg) {
-  return `已识别你的学习需求：**${userMsg}**
-
-系统将优先调用 Profile Agent、RAG Agent、Doc Agent、MindMap Agent、Quiz Agent 和 Reviewer Agent。
-
-- 学习画像：偏好图解、例题和代码示例
-- 当前薄弱点：Cache 映射方式、流水线冲突
-- 推荐资源：讲解文档、思维导图、练习题、代码案例、视频脚本
-- 下一步：进入右侧资源区查看生成结果`
+function formatRequestError(error) {
+  const detail = error?.response?.data?.detail || error?.message || '未知错误'
+  if (error?.code === 'ECONNABORTED') {
+    return '后端智能体执行超过前端等待时间，本次没有确认生成资源。请稍后查看后端日志，或先在资源工厂生成单类资源。'
+  }
+  if (error?.response?.status === 500) {
+    return `后端资源生成接口报错：${detail}\n\n这不是前端已经生成了资源，而是后端流程中断了。`
+  }
+  return `请求后端失败：${detail}\n\n当前资源区会保留已有内容，不会伪造生成结果。`
 }
 
 async function send() {
@@ -120,13 +131,18 @@ async function send() {
 
   streaming.value = true
   streamContent.value = ''
+  workspaceStore.setAgentRunning()
 
   try {
     const { sendMessage } = await import('../api/chat')
     const res = await sendMessage(userMsg, courseStore.currentId)
-    streamContent.value = formatResponse(res.data.data)
-  } catch {
-    streamContent.value = mockReply(userMsg)
+    const data = res.data.data
+    workspaceStore.applyChatResult(data, userMsg)
+    streamContent.value = formatResponse(data)
+    userStore.fetchProfile().catch(() => {})
+  } catch (error) {
+    workspaceStore.markAgentFailed(error?.response?.data?.detail || error?.message || 'request failed')
+    streamContent.value = formatRequestError(error)
   } finally {
     messages.value.push({ role: 'assistant', content: streamContent.value })
     streaming.value = false

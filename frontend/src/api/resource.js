@@ -5,5 +5,5 @@ export function generateResource(knowledgePoint, resourceTypes, course = 'comput
     course,
     knowledge_point: knowledgePoint,
     resource_types: resourceTypes
-  })
+  }, { timeout: 120000 })
 }

@@ -29,8 +29,10 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { submitQuiz } from '../api/quiz'
+import { useUserStore } from '../stores/user'
 
 const props = defineProps({ quiz: { type: Object, default: () => ({}) } })
+const userStore = useUserStore()
 const selected = ref(null)
 const submitted = ref(false)
 const submitting = ref(false)
@@ -60,8 +62,8 @@ function buildAnswer() {
     question_id: props.quiz.id || 'demo_cache_mapping_1',
     knowledge_point: props.quiz.knowledge_point || 'Cache 映射方式',
     question: props.quiz.question || '',
-    correct_answer: correctAnswer.value,
-    user_answer: selectedAnswer.value,
+    correct_answer: optionLabel(correctIndex.value),
+    user_answer: optionLabel(selected.value),
     difficulty: props.quiz.difficulty || 'medium'
   }
 }
@@ -76,6 +78,10 @@ async function submit() {
   try {
     const res = await submitQuiz([buildAnswer()])
     remoteResult.value = res.data?.results?.[0] || null
+    if (res.data?.updated_profile) {
+      userStore.setProfile(res.data.updated_profile, 'remote')
+    }
+    window.dispatchEvent(new CustomEvent('aptadapt:evaluation-refresh'))
   } catch (e) {
     submitError.value = e.message || 'submit quiz failed'
   } finally {

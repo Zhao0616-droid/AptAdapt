@@ -26,6 +26,7 @@
       <div class="user-pill">
         <span class="pulse-dot"></span>
         <span>{{ displayName }} · {{ courseStore.currentCourse?.name || 'AptAdapt' }}</span>
+        <button type="button" class="logout-button" @click="handleLogout">退出</button>
       </div>
     </header>
 
@@ -44,7 +45,7 @@
         </div>
       </section>
 
-      <section v-if="activeModule === 'workspace'" class="module-grid workspace-grid">
+      <section v-show="activeModule === 'workspace'" class="module-grid workspace-grid">
         <aside class="side-column">
           <section class="aa-panel course-panel">
             <div class="section-head">
@@ -91,7 +92,7 @@
         </aside>
       </section>
 
-      <section v-else-if="activeModule === 'resources'" class="module-grid resource-grid">
+      <section v-show="activeModule === 'resources'" class="module-grid resource-grid">
         <section class="aa-panel resource-workbench">
           <ResourcePanel />
         </section>
@@ -110,7 +111,7 @@
         </aside>
       </section>
 
-      <section v-else-if="activeModule === 'agents'" class="module-grid agents-grid">
+      <section v-show="activeModule === 'agents'" class="module-grid agents-grid">
         <section class="aa-panel agent-map-panel">
           <div class="section-head">
             <div>
@@ -140,7 +141,7 @@
         </section>
       </section>
 
-      <section v-else class="module-grid evaluation-grid">
+      <section v-show="activeModule === 'evaluation'" class="module-grid evaluation-grid">
         <section class="aa-panel evaluation-workbench">
           <EvaluationPanel />
         </section>
@@ -164,8 +165,10 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useCourseStore } from '../stores/course'
 import { useUserStore } from '../stores/user'
+import { useWorkspaceStore } from '../stores/workspace'
 import ChatPanel from '../components/ChatPanel.vue'
 import PathTree from '../components/PathTree.vue'
 import ResourcePanel from '../components/ResourcePanel.vue'
@@ -175,9 +178,11 @@ import AgentStatusBar from '../components/AgentStatusBar.vue'
 
 const courseStore = useCourseStore()
 const userStore = useUserStore()
+const workspaceStore = useWorkspaceStore()
+const router = useRouter()
 const activeModule = ref('workspace')
 
-const agentStatuses = ref([])
+const agentStatuses = computed(() => workspaceStore.agentStatuses)
 
 const navItems = computed(() => {
   const courseName = courseStore.currentCourse?.name || '计算机组成原理'
@@ -269,8 +274,14 @@ function handleCourseChange(courseId) {
   courseStore.switchCourse(courseId)
 }
 
+function handleLogout() {
+  userStore.logout()
+  router.push('/login')
+}
+
 onMounted(() => {
   courseStore.loadCourses()
+  userStore.fetchProfile().catch(() => {})
 })
 </script>
 
@@ -376,6 +387,17 @@ onMounted(() => {
   background: rgba(226, 255, 245, 0.76);
   color: #14664d;
   font-weight: 700;
+}
+
+.logout-button {
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-left: 1px solid rgba(39, 201, 148, 0.22);
+  color: #14664d;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 800;
 }
 
 .pulse-dot {

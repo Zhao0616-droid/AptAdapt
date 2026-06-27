@@ -5,6 +5,7 @@
       <div>
         <b>{{ agent.name }}</b>
         <p>{{ agent.label }}</p>
+        <em v-if="agent.duration">{{ agent.duration }}</em>
       </div>
     </div>
   </div>
@@ -69,6 +70,15 @@ defineProps({
   margin: 4px 0 0;
   color: var(--aa-muted);
   font-size: 12px;
+}
+
+.agent-card em {
+  display: inline-block;
+  margin-top: 6px;
+  color: #18abd3;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
 }
 
 @keyframes pulse {

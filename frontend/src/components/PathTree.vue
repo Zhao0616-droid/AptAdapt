@@ -10,7 +10,7 @@
 
     <div class="sync-row">
       <p>{{ sourceLabel }}</p>
-      <el-button size="small" @click="loadPath" :loading="loading">同步后端路径</el-button>
+      <el-button size="small" @click="loadPath" :loading="loading" :disabled="loading">同步后端路径</el-button>
     </div>
 
     <ol class="timeline">
@@ -33,7 +33,13 @@ import { getLearningPath } from '../api/path'
 const courseStore = useCourseStore()
 const loading = ref(false)
 const error = ref('')
-const remoteNodes = ref([])
+const source = ref('demo')
+const remoteNodes = ref([
+  { id: 'digital_logic', title: '数字逻辑基础', desc: '先补齐门电路、触发器和时序逻辑。', status: 'done' },
+  { id: 'instruction', title: '指令系统', desc: '理解指令格式、寻址方式和机器指令执行。', status: 'done' },
+  { id: 'cache_mapping', title: 'Cache 映射方式', desc: '当前重点：直接映射、全相联、组相联。', status: 'active' },
+  { id: 'pipeline', title: '流水线冲突', desc: '下一步学习结构冲突、数据冲突和控制冲突。', status: 'pending' }
+])
 
 const displayNodes = computed(() => remoteNodes.value)
 
@@ -47,8 +53,8 @@ const progress = computed(() => {
 
 const sourceLabel = computed(() => {
   if (loading.value) return '正在同步后端学习路径...'
-  if (error.value) return '后端暂不可用，请稍后重试'
-  return remoteNodes.value.length ? '已接入后端个性化路径接口' : '暂无学习路径，在对话中描述学习目标即可自动规划'
+  if (error.value) return '后端暂不可用，当前展示演示路径'
+  return source.value === 'remote' ? '已接入后端个性化路径接口' : '演示路径，可登录后同步真实规划'
 })
 
 function normalizePath(path = []) {
@@ -74,14 +80,19 @@ function normalizePath(path = []) {
 }
 
 async function loadPath() {
+  if (loading.value) return
   loading.value = true
   error.value = ''
   try {
     const res = await getLearningPath(courseStore.currentId || 'computer_organization')
-    remoteNodes.value = normalizePath(res.data?.path || [])
+    const nodes = normalizePath(res.data?.path || [])
+    if (nodes.length) {
+      remoteNodes.value = nodes
+      source.value = 'remote'
+    }
   } catch (e) {
     error.value = e.message || 'load path failed'
-    remoteNodes.value = []
+    source.value = 'demo'
   } finally {
     loading.value = false
   }

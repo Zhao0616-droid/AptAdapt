@@ -124,6 +124,9 @@ async def send_message(
                 "passed": result.get("review_passed"),
                 "notes": result.get("review_notes", []),
             },
+            "execution_log": result.get("execution_log", []),
+            "step_index": result.get("step_index", 0),
+            "total_steps": result.get("total_steps", 0),
             "retrieved_chunks": [
                 {"id": c["id"], "title": c.get("title", "")}
                 for c in result.get("retrieved_chunks", [])

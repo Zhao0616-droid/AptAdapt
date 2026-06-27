@@ -25,6 +25,27 @@ def _call_llm(prompt: str) -> str:
     return llm.chat(prompt)
 
 
+def _safe_call_llm(prompt: str, fallback: str) -> str:
+    try:
+        content = _call_llm(prompt)
+        return content.strip() or fallback
+    except Exception:
+        return fallback
+
+
+def _profile_to_json(profile: Optional[StudentProfile]) -> str:
+    if not profile:
+        return "{}"
+    return json.dumps(profile.model_dump(), ensure_ascii=False, indent=2)
+
+
+def _render_prompt(template: str, values: dict) -> str:
+    rendered = template
+    for key, value in values.items():
+        rendered = rendered.replace("{" + key + "}", str(value))
+    return rendered
+
+
 def _parse_json(raw: str) -> dict:
     """从 LLM 返回中提取 JSON"""
     raw = raw.strip()
@@ -50,7 +71,7 @@ def _build_context(
 
     return {
         "knowledge_point": knowledge_point,
-        "profile": profile.model_dump_json(indent=2, ensure_ascii=False) if profile else "{}",
+        "profile": _profile_to_json(profile),
         "weak_points": json.dumps(profile.weak_points, ensure_ascii=False) if profile else "[]",
         "retrieved_chunks": chunks_text,
         "message": f"请生成关于「{knowledge_point}」的学习资源",
@@ -65,8 +86,9 @@ def generate_doc(knowledge_point: str, profile: Optional[StudentProfile],
     template = _load_prompt("doc_prompt.txt")
     ctx = _build_context(knowledge_point, profile, chunks)
 
-    prompt = template.format(**{k: ctx.get(k, "") for k in ["profile", "retrieved_chunks", "message"]})
-    content = _call_llm(prompt)
+    prompt = _render_prompt(template, {k: ctx.get(k, "") for k in ["profile", "retrieved_chunks", "message"]})
+    fallback = f"## {knowledge_point}\n\n当前 AI 服务暂不可用，系统已生成基础讲解框架。请结合知识库片段复习核心概念、典型例题和易错点。"
+    content = _safe_call_llm(prompt, fallback)
 
     return ResourceItem(
         type="doc",
@@ -92,7 +114,7 @@ mindmap
     子主题2
       细节1"""
 
-    content = _call_llm(prompt)
+    content = _safe_call_llm(prompt, f"mindmap\n  root(({knowledge_point}))\n    核心概念\n    关键原理\n    典型应用")
     # 如果 LLM 没按格式，做兜底
     if not content.strip().startswith("mindmap"):
         content = f"mindmap\n  root(({knowledge_point}))\n    核心概念\n    关键原理\n    典型应用"
@@ -110,8 +132,8 @@ def generate_quiz(knowledge_point: str, profile: Optional[StudentProfile],
     template = _load_prompt("quiz_prompt.txt")
     ctx = _build_context(knowledge_point, profile, chunks)
 
-    prompt = template.format(**{k: ctx.get(k, "") for k in ["profile", "knowledge_point", "weak_points"]})
-    raw = _call_llm(prompt)
+    prompt = _render_prompt(template, {k: ctx.get(k, "") for k in ["profile", "knowledge_point", "weak_points"]})
+    raw = _safe_call_llm(prompt, "{}")
     quiz_data = _parse_json(raw)
 
     # 兜底
@@ -139,8 +161,8 @@ def generate_code(knowledge_point: str, profile: Optional[StudentProfile],
     template = _load_prompt("code_prompt.txt")
     ctx = _build_context(knowledge_point, profile, chunks)
 
-    prompt = template.format(**{k: ctx.get(k, "") for k in ["profile", "knowledge_point", "retrieved_chunks"]})
-    raw = _call_llm(prompt)
+    prompt = _render_prompt(template, {k: ctx.get(k, "") for k in ["profile", "knowledge_point", "retrieved_chunks"]})
+    raw = _safe_call_llm(prompt, "{}")
     code_data = _parse_json(raw)
 
     if not code_data.get("source"):
@@ -174,7 +196,8 @@ def generate_video_script(knowledge_point: str, profile: Optional[StudentProfile
 - 画面: ...
 - 旁白: ..."""
 
-    content = _call_llm(prompt)
+    fallback = f"## {knowledge_point} — 短视频讲解脚本\n\n### 第 1 镜\n- 画面: 知识点标题卡片\n- 旁白: 今天我们学习 {knowledge_point}。\n\n### 第 2 镜\n- 画面: 核心概念图解\n- 旁白: 请结合课程知识库理解关键原理。\n"
+    content = _safe_call_llm(prompt, fallback)
 
     return ResourceItem(
         type="video_script",
@@ -205,13 +228,17 @@ def review_resources(resources: list[ResourceItem], chunks: list[dict]) -> Revie
         f"[{r.type}] {r.title}\n{r.content[:500]}" for r in resources
     )
 
-    prompt = template.format(
-        generated_resources=resources_text[:3000],
-        retrieved_chunks=chunks_text[:2000],
+    prompt = (
+        template
+        .replace("{generated_resources}", resources_text[:3000])
+        .replace("{retrieved_chunks}", chunks_text[:2000])
     )
 
-    raw = _call_llm(prompt)
-    result = _parse_json(raw)
+    try:
+        raw = _safe_call_llm(prompt, "{}")
+        result = _parse_json(raw)
+    except Exception:
+        result = {}
 
     passed = result.get("passed", True)
     notes = [

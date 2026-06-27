@@ -51,7 +51,7 @@ KEYWORD_ROUTES = [
     (["导图", "思维导图", "脑图", "mindmap"], ["profile", "retrieve", "mindmap", "reviewer"]),
     (["代码", "verilog", "汇编", "Verilog", "写个", "实现"], ["profile", "retrieve", "code", "reviewer"]),
     (["视频", "脚本", "讲解视频", "录制"], ["profile", "retrieve", "video_script", "reviewer"]),
-    (["全面", "所有", "全部", "整套", "完整"], ["profile", "retrieve", "doc", "mindmap", "quiz", "code", "reviewer"]),
+    (["全面", "所有", "全部", "整套", "完整"], ["profile", "retrieve", "doc", "quiz", "reviewer"]),
 ]
 
 
@@ -59,12 +59,26 @@ def classify_by_keywords(message: str) -> tuple[str, list[str], str]:
     """关键词匹配：返回 (task_type, agent_sequence, reasoning)"""
     for keywords, sequence in KEYWORD_ROUTES:
         if any(kw in message for kw in keywords):
-            task_type = sequence[0] if sequence[0] != "profile" else (sequence[1] if len(sequence) > 1 else "profile")
+            task_type = _derive_task_type(sequence)
             reasoning = f"关键词匹配 → 路由到: {' → '.join(sequence)}"
             return task_type, sequence, reasoning
 
     # 默认：生成讲解文档
     return "doc", ["profile", "retrieve", "doc", "reviewer"], "默认路由 → 生成讲解文档"
+
+
+def _derive_task_type(sequence: list[str]) -> str:
+    resource_agents = ["doc", "mindmap", "quiz", "code", "video_script"]
+    selected = [agent for agent in sequence if agent in resource_agents]
+    if len(selected) > 1:
+        return "resource_bundle"
+    if selected:
+        return selected[0]
+    if "planner" in sequence:
+        return "path"
+    if "profile" in sequence:
+        return "profile"
+    return sequence[0] if sequence else "doc"
 
 
 def classify_by_llm(message: str) -> tuple[str, list[str], str]:

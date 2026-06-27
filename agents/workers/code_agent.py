@@ -1,6 +1,7 @@
 """Code Agent — 基于知识点和学生画像，调用 LLM 生成 Verilog/汇编/伪代码案例"""
 import json
 import logging
+import re
 from ..state import AgentState
 from ..utils import advance_agent
 
@@ -41,10 +42,7 @@ def code_node(state: AgentState) -> AgentState:
         from app.llm_client import SparkLLM
         llm = SparkLLM()
         raw = llm.chat(prompt).strip()
-        if raw.startswith("```"):
-            lines = raw.split("\n")
-            raw = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-        code = json.loads(raw)
+        code = _parse_code_response(raw, message, chunks)
     except Exception as e:
         logger.error("Code Agent LLM 调用失败: %s", e)
         code = _fallback_code(message, chunks)
@@ -71,6 +69,51 @@ def _build_prompt(message: str, profile: dict | None, chunks: list[dict]) -> str
             parts.append(f"- [{c.get('id')}] {c.get('title')}: {c.get('content', '')[:300]}")
     parts.append(f"\n请为以下知识点生成代码案例: {message}")
     return "\n".join(parts)
+
+
+def _parse_code_response(raw: str, message: str, chunks: list[dict]) -> dict:
+    raw = _strip_code_fence(raw.strip())
+    try:
+        data = json.loads(raw)
+        return _normalize_code(data, message, chunks)
+    except json.JSONDecodeError:
+        language = _extract_json_string(raw, "language") or "verilog"
+        source = _extract_json_string(raw, "source") or raw
+        explanation = _extract_json_string(raw, "explanation") or "模型返回的代码不是严格 JSON，系统已保留原始内容。"
+        return _normalize_code({
+            "language": language,
+            "source": source,
+            "explanation": explanation,
+        }, message, chunks)
+
+
+def _strip_code_fence(raw: str) -> str:
+    if not raw.startswith("```"):
+        return raw
+    lines = raw.split("\n")
+    return "\n".join(lines[1:-1] if lines and lines[-1].strip() == "```" else lines[1:])
+
+
+def _extract_json_string(raw: str, key: str) -> str:
+    match = re.search(rf'"{re.escape(key)}"\s*:\s*"', raw)
+    if not match:
+        return ""
+    start = match.end()
+    next_key = re.search(r'"\s*,\s*"[A-Za-z_][A-Za-z0-9_]*"\s*:', raw[start:])
+    if next_key:
+        value = raw[start:start + next_key.start()]
+    else:
+        value = re.sub(r'"\s*}\s*$', "", raw[start:], flags=re.DOTALL)
+    return value.strip().strip('"')
+
+
+def _normalize_code(data: dict, message: str, chunks: list[dict]) -> dict:
+    fallback = _fallback_code(message, chunks)
+    return {
+        "language": data.get("language") or fallback["language"],
+        "source": data.get("source") or fallback["source"],
+        "explanation": data.get("explanation") or fallback["explanation"],
+    }
 
 
 def _fallback_code(message: str, chunks: list[dict]) -> dict:

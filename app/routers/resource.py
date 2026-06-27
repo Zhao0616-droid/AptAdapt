@@ -42,7 +42,10 @@ async def generate(
     profile = get_profile(db, uid)
 
     # 2. 检索知识库
-    chunks = retrieve(req.knowledge_point, top_k=5, course_id=req.course)
+    try:
+        chunks = retrieve(req.knowledge_point, top_k=5, course_id=req.course)
+    except Exception:
+        chunks = []
 
     # 3. 生成资源 + 审核
     try:

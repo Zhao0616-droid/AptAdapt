@@ -34,6 +34,11 @@
                 登录
               </el-button>
             </el-form-item>
+            <el-form-item>
+              <el-button size="large" class="demo-button" @click="handleDemoLogin" style="width: 100%">
+                演示模式进入工作台
+              </el-button>
+            </el-form-item>
           </el-form>
         </el-tab-pane>
         <el-tab-pane label="注册" name="register">
@@ -87,10 +92,16 @@ async function handleLogin() {
     ElMessage.success('登录成功')
     router.push('/workspace')
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '登录失败')
+    ElMessage.error(e.response?.data?.detail || '登录失败：请确认后端服务已启动')
   } finally {
     loading.value = false
   }
+}
+
+function handleDemoLogin() {
+  userStore.enterDemoMode()
+  ElMessage.success('已进入演示模式')
+  router.push('/workspace')
 }
 
 async function handleRegister() {
@@ -102,7 +113,7 @@ async function handleRegister() {
     ElMessage.success('注册成功，请登录')
     activeTab.value = 'login'
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '注册失败')
+    ElMessage.error(e.response?.data?.detail || '注册失败：请确认后端服务已启动')
   } finally {
     loading.value = false
   }
@@ -158,6 +169,19 @@ async function handleRegister() {
 
 .card-head {
   margin-bottom: 18px;
+}
+
+.demo-button {
+  color: #14664d;
+  border-color: rgba(39, 201, 148, 0.35);
+  background: rgba(226, 255, 245, 0.76);
+  font-weight: 800;
+}
+
+.demo-button:hover {
+  color: #0f5f47;
+  border-color: rgba(39, 201, 148, 0.55);
+  background: rgba(213, 255, 241, 0.92);
 }
 
 @media (max-width: 900px) {

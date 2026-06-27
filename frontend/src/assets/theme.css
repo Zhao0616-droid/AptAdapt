@@ -25,6 +25,10 @@ body,
   min-height: 100%;
 }
 
+html {
+  overflow-y: auto;
+}
+
 body {
   margin: 0;
   font-family:
@@ -36,7 +40,8 @@ body {
     radial-gradient(circle at 86% 10%, rgba(174, 247, 217, 0.52), transparent 25%),
     radial-gradient(circle at 74% 82%, rgba(255, 201, 221, 0.42), transparent 28%),
     linear-gradient(135deg, var(--aa-bg), var(--aa-bg-soft) 52%, #fff9fd);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 body::before {

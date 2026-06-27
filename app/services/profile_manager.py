@@ -22,16 +22,20 @@ EXTRACTION_PROMPT = """请从以下学生对话中，提取学习画像信息，
 - resource_preference: 偏好资源类型列表（如 ["思维导图","练习题"]）
 
 学生对话:
-{conversation}
+__CONVERSATION__
 
 仅输出 JSON:"""
+
+
+def _render_extraction_prompt(text: str) -> str:
+    return EXTRACTION_PROMPT.replace("__CONVERSATION__", text)
 
 
 def extract_profile_from_text(text: str) -> StudentProfile:
     """用大模型从对话文本中抽取学生画像，失败时返回空画像不抛异常"""
     try:
         llm = SparkLLM()
-        prompt = EXTRACTION_PROMPT.format(conversation=text)
+        prompt = _render_extraction_prompt(text)
         raw = llm.chat(prompt)
 
         raw = raw.strip()

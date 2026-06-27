@@ -1,21 +1,49 @@
-"""讯飞星火 Chat API WebSocket 客户端 — 支持普通调用与流式输出"""
-import websocket
+"""LLM client facade.
+
+The project historically called this class SparkLLM. Keep that public name so
+existing agents do not need to know which provider is configured underneath.
+"""
+import base64
 import hashlib
 import hmac
-import base64
 import json
-import time
 import ssl
+import time
 from typing import Generator
 from urllib.parse import urlencode
 
-from .config import XFYUN_APPID, XFYUN_API_KEY, XFYUN_API_SECRET
+import requests
+import websocket
+
+from .config import (
+    LLM_PROVIDER,
+    OPENAI_API_KEY,
+    OPENAI_BASE_URL,
+    OPENAI_MODEL,
+    LLM_TIMEOUT_SECONDS,
+    XFYUN_APPID,
+    XFYUN_API_KEY,
+    XFYUN_API_SECRET,
+)
 
 SYSTEM_PROMPT = "你是一个专业的计算机组成原理助教老师，请用通俗易懂的语言回答学生的问题。"
 
 
 class SparkLLM:
+    """Unified LLM client used by all agents.
+
+    Provider selection:
+    - LLM_PROVIDER=openai_compatible: OpenAI-compatible chat completions API.
+    - LLM_PROVIDER=xfyun: XFYUN Spark WebSocket API.
+    """
+
     def __init__(self):
+        self.provider = LLM_PROVIDER
+        self.openai_api_key = OPENAI_API_KEY
+        self.openai_base_url = OPENAI_BASE_URL.rstrip("/")
+        self.openai_model = OPENAI_MODEL
+        self.timeout = LLM_TIMEOUT_SECONDS
+
         self.APPID = XFYUN_APPID
         self.API_KEY = XFYUN_API_KEY
         self.API_SECRET = XFYUN_API_SECRET
@@ -23,8 +51,75 @@ class SparkLLM:
         self.Path = "/v3.5/chat"
         self.URL = f"wss://{self.Host}{self.Path}"
 
+    def chat(self, message: str) -> str:
+        """普通调用，等完整返回后一次性返回。"""
+        if self.provider == "openai_compatible":
+            return self._chat_openai_compatible(message)
+        return self._chat_xfyun(message)
+
+    def chat_stream(self, message: str) -> Generator[str, None, None]:
+        """流式调用，逐 token yield。"""
+        if self.provider == "openai_compatible":
+            yield from self._chat_stream_openai_compatible(message)
+            return
+        yield from self._chat_stream_xfyun(message)
+
+    # ── OpenAI-compatible provider ──
+
+    def _chat_openai_compatible(self, message: str) -> str:
+        url = f"{self.openai_base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.openai_api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.openai_model,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": message},
+            ],
+            "temperature": 0.7,
+        }
+        resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+
+    def _chat_stream_openai_compatible(self, message: str) -> Generator[str, None, None]:
+        url = f"{self.openai_base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.openai_api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.openai_model,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": message},
+            ],
+            "temperature": 0.7,
+            "stream": True,
+        }
+        with requests.post(url, headers=headers, json=payload, stream=True, timeout=self.timeout) as resp:
+            resp.raise_for_status()
+            for raw_line in resp.iter_lines(decode_unicode=True):
+                if not raw_line or not raw_line.startswith("data:"):
+                    continue
+                line = raw_line.removeprefix("data:").strip()
+                if line == "[DONE]":
+                    break
+                try:
+                    data = json.loads(line)
+                    delta = data["choices"][0].get("delta", {})
+                    content = delta.get("content")
+                    if content:
+                        yield content
+                except Exception:
+                    continue
+
+    # ── XFYUN provider ──
+
     def _build_url(self) -> str:
-        """生成带鉴权签名的 WebSocket URL"""
         now = time.time()
         date = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(now))
 
@@ -67,64 +162,48 @@ class SparkLLM:
             },
         }
 
-    def chat(self, message: str) -> str:
-        """普通调用 — 等完整返回后一次性返回"""
+    def _chat_xfyun(self, message: str) -> str:
         url = self._build_url()
-        ws = websocket.create_connection(url, sslopt={"cert_reqs": ssl.CERT_NONE})
+        ws = websocket.create_connection(
+            url,
+            timeout=self.timeout,
+            sslopt={"cert_reqs": ssl.CERT_NONE},
+        )
         ws.send(json.dumps(self._build_payload(message)))
 
         full_response = ""
         try:
             while True:
                 res = json.loads(ws.recv())
-                if res["header"]["status"] == 2:
+                choices = res.get("payload", {}).get("choices", {})
+                text = choices.get("text", [])
+                if text and "content" in text[0]:
+                    full_response += text[0]["content"]
+                if res.get("header", {}).get("status") == 2:
                     break
-                choices = res["payload"]["choices"]
-                if choices and "content" in choices["text"][0]:
-                    full_response += choices["text"][0]["content"]
-        except Exception as e:
-            print(f"接收消息出错: {e}")
         finally:
             ws.close()
-
         return full_response
 
-    def chat_stream(self, message: str) -> Generator[str, None, None]:
-        """
-        流式调用 — 逐 token yield，配合 SSE 使用
-
-        用法:
-            llm = SparkLLM()
-            for token in llm.chat_stream("什么是冯诺依曼结构？"):
-                yield f"data: {json.dumps({'content': token})}\n\n"
-        """
+    def _chat_stream_xfyun(self, message: str) -> Generator[str, None, None]:
         url = self._build_url()
-        ws = websocket.create_connection(url, sslopt={"cert_reqs": ssl.CERT_NONE})
+        ws = websocket.create_connection(
+            url,
+            timeout=self.timeout,
+            sslopt={"cert_reqs": ssl.CERT_NONE},
+        )
         ws.send(json.dumps(self._build_payload(message)))
 
         try:
             while True:
                 res = json.loads(ws.recv())
-                if res["header"]["status"] == 2:
+                choices = res.get("payload", {}).get("choices", {})
+                text = choices.get("text", [])
+                if text and "content" in text[0]:
+                    yield text[0]["content"]
+                if res.get("header", {}).get("status") == 2:
                     break
-                choices = res["payload"]["choices"]
-                if choices and "content" in choices["text"][0]:
-                    content = choices["text"][0]["content"]
-                    yield content
         except Exception as e:
             yield f"[错误] {e}"
         finally:
             ws.close()
-
-
-if __name__ == "__main__":
-    llm = SparkLLM()
-
-    print("=== 普通调用 ===")
-    answer = llm.chat("什么是冯诺依曼结构？")
-    print("AI回复:", answer)
-
-    print("\n=== 流式调用 ===")
-    for token in llm.chat_stream("简单说一下Cache的作用"):
-        print(token, end="", flush=True)
-    print()

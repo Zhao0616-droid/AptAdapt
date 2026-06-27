@@ -133,6 +133,8 @@ def retrieve(query: str, top_k: int = 5, course_id: str = DEFAULT_COURSE) -> lis
         if r.course_id != course_id:
             r.switch_course(course_id)
         if r.count == 0:
+            r.populate()
+        if r.count == 0:
             return []
         return r.retrieve(query, top_k)
     except Exception as e:

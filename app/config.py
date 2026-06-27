@@ -13,6 +13,14 @@ XFYUN_APPID = os.getenv("XFYUN_APPID", "")
 XFYUN_API_KEY = os.getenv("XFYUN_API_KEY", "")
 XFYUN_API_SECRET = os.getenv("XFYUN_API_SECRET", "")
 
+# ── LLM Provider 配置 ──
+# openai_compatible: 使用 OpenAI 兼容接口；xfyun: 使用讯飞星火 WebSocket。
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "xfyun")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", "20"))
+
 # ── 讯飞 Embedding API ──
 EMBEDDING_HOST = os.getenv("XFYUN_EMBEDDING_HOST", "emb-cn-huabei-1.xf-yun.com")
 EMBEDDING_PATH = os.getenv("XFYUN_EMBEDDING_PATH", "/v1/embeddings")
@@ -33,7 +41,11 @@ def _check_required(name: str, value: str):
         raise RuntimeError(f"缺少必要的环境变量: {name}。请复制 .env.example 为 .env 并填写。")
 
 
-_check_required("XFYUN_APPID", XFYUN_APPID)
-_check_required("XFYUN_API_KEY", XFYUN_API_KEY)
-_check_required("XFYUN_API_SECRET", XFYUN_API_SECRET)
+if LLM_PROVIDER == "openai_compatible":
+    _check_required("OPENAI_API_KEY", OPENAI_API_KEY)
+    _check_required("OPENAI_BASE_URL", OPENAI_BASE_URL)
+else:
+    _check_required("XFYUN_APPID", XFYUN_APPID)
+    _check_required("XFYUN_API_KEY", XFYUN_API_KEY)
+    _check_required("XFYUN_API_SECRET", XFYUN_API_SECRET)
 _check_required("JWT_SECRET_KEY", SECRET_KEY)
