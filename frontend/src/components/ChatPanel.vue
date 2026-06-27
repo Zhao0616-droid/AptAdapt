@@ -172,7 +172,11 @@ onMounted(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 18px 0;
+  padding: 14px 18px 0;
+}
+
+.chat-header .aa-title {
+  font-size: 22px;
 }
 
 .stream-badge {
@@ -186,15 +190,15 @@ onMounted(() => {
 }
 
 .chat-messages {
-  min-height: 240px;
+  min-height: 0;
   overflow-y: auto;
-  padding: 18px;
+  padding: 14px 18px;
 }
 
 .message {
   display: flex;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 
 .message.user {
@@ -232,6 +236,24 @@ onMounted(() => {
   border: 1px solid rgba(89, 128, 176, 0.12);
 }
 
+.content :deep(h1) {
+  font-size: 24px;
+  line-height: 1.25;
+  margin: 0 0 12px;
+}
+
+.content :deep(h2) {
+  font-size: 20px;
+  line-height: 1.3;
+  margin: 12px 0 8px;
+}
+
+.content :deep(h3) {
+  font-size: 17px;
+  line-height: 1.35;
+  margin: 10px 0 6px;
+}
+
 .content :deep(p) {
   margin: 0;
 }
@@ -258,7 +280,7 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 0 18px 10px;
+  padding: 0 18px 8px;
 }
 
 .quick-prompts button {
@@ -275,7 +297,7 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
-  padding: 12px 18px 18px;
+  padding: 10px 18px 14px;
   border-top: 1px solid rgba(89, 128, 176, 0.12);
 }
 

@@ -31,6 +31,10 @@ def _render_extraction_prompt(text: str) -> str:
     return EXTRACTION_PROMPT.replace("__CONVERSATION__", text)
 
 
+def _profile_to_json(profile: StudentProfile) -> str:
+    return json.dumps(profile.model_dump(), ensure_ascii=False)
+
+
 def extract_profile_from_text(text: str) -> StudentProfile:
     """用大模型从对话文本中抽取学生画像，失败时返回空画像不抛异常"""
     try:
@@ -67,7 +71,7 @@ def get_profile(db: Session, user_id: int) -> Optional[StudentProfile]:
 def save_profile(db: Session, user_id: int, profile: StudentProfile) -> UserProfile:
     """保存或更新学生画像"""
     row = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
-    profile_json = profile.model_dump_json(ensure_ascii=False)
+    profile_json = _profile_to_json(profile)
 
     if row:
         row.profile_json = profile_json

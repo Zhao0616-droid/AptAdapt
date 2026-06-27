@@ -81,15 +81,16 @@
           </section>
         </aside>
 
-        <section class="aa-panel chat-shell">
-          <ChatPanel />
+        <section class="aa-panel workspace-stack">
+          <div class="workspace-scroll">
+            <section class="stack-pane chat-pane">
+              <ChatPanel />
+            </section>
+            <section class="stack-pane path-pane">
+              <PathTree />
+            </section>
+          </div>
         </section>
-
-        <aside class="side-column">
-          <section class="aa-panel">
-            <PathTree />
-          </section>
-        </aside>
       </section>
 
       <section v-show="activeModule === 'resources'" class="module-grid resource-grid">
@@ -475,7 +476,7 @@ onMounted(() => {
 }
 
 .workspace-grid {
-  grid-template-columns: 300px minmax(0, 1fr) 320px;
+  grid-template-columns: 300px minmax(0, 1fr);
 }
 
 .resource-grid {
@@ -506,12 +507,35 @@ onMounted(() => {
 
 .resource-workbench,
 .evaluation-workbench,
-.chat-shell {
+.workspace-stack {
   min-height: 560px;
 }
 
-.chat-shell {
+.workspace-stack {
   padding: 0;
+  overflow: hidden;
+}
+
+.workspace-scroll {
+  height: min(760px, calc(100vh - 260px));
+  min-height: 620px;
+  display: grid;
+  grid-template-rows: minmax(360px, 1fr) minmax(240px, 0.72fr);
+  gap: 0;
+  overflow-y: auto;
+}
+
+.stack-pane {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-pane {
+  border-bottom: 1px solid rgba(89, 128, 176, 0.12);
+}
+
+.path-pane {
+  background: rgba(250, 253, 255, 0.62);
 }
 
 .section-head {
@@ -697,8 +721,14 @@ onMounted(() => {
 
   .resource-workbench,
   .evaluation-workbench,
-  .chat-shell {
+  .workspace-stack {
     min-height: 520px;
+  }
+
+  .workspace-scroll {
+    height: auto;
+    min-height: 0;
+    grid-template-rows: minmax(460px, 60vh) minmax(260px, auto);
   }
 }
 </style>

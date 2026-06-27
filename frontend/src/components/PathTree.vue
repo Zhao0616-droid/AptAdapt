@@ -103,7 +103,11 @@ onMounted(() => { loadPath() })
 
 <style scoped>
 .path-tree {
-  padding: 18px;
+  height: 100%;
+  min-height: 0;
+  padding: 14px 18px 18px;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .section-title {
@@ -115,6 +119,10 @@ onMounted(() => { loadPath() })
 
 .section-title strong {
   color: var(--aa-green);
+  font-size: 24px;
+}
+
+.section-title .aa-title {
   font-size: 22px;
 }
 
@@ -136,6 +144,8 @@ onMounted(() => { loadPath() })
   list-style: none;
   padding: 8px 0 0;
   margin: 0;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .timeline li {
@@ -143,7 +153,7 @@ onMounted(() => { loadPath() })
   grid-template-columns: 22px 1fr;
   gap: 10px;
   position: relative;
-  padding: 13px 0;
+  padding: 10px 0;
 }
 
 .timeline li:not(:last-child)::after {

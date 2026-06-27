@@ -1,6 +1,7 @@
 """Quiz Agent — 基于知识点和学生画像，调用 LLM 生成练习题"""
 import json
 import logging
+import re
 from ..state import AgentState
 from ..utils import advance_agent
 
@@ -41,10 +42,7 @@ def quiz_node(state: AgentState) -> AgentState:
         from app.llm_client import SparkLLM
         llm = SparkLLM()
         raw = llm.chat(prompt).strip()
-        if raw.startswith("```"):
-            lines = raw.split("\n")
-            raw = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-        quiz = json.loads(raw)
+        quiz = _parse_quiz_response(raw, message, chunks)
     except Exception as e:
         logger.error("Quiz Agent LLM 调用失败: %s", e)
         quiz = _fallback_quiz(message, chunks)
@@ -73,6 +71,45 @@ def _build_prompt(message: str, profile: dict | None, chunks: list[dict]) -> str
             parts.append(f"- [{c.get('id')}] {c.get('title')}: {c.get('content', '')[:300]}")
     parts.append(f"\n请根据以上信息，为以下知识点生成一道练习题: {message}")
     return "\n".join(parts)
+
+
+def _parse_quiz_response(raw: str, message: str, chunks: list[dict]) -> dict:
+    raw = _strip_code_fence(raw.strip())
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        data = json.loads(match.group()) if match else {}
+    return _normalize_quiz(data, message, chunks)
+
+
+def _strip_code_fence(raw: str) -> str:
+    if not raw.startswith("```"):
+        return raw
+    lines = raw.split("\n")
+    return "\n".join(lines[1:-1] if lines and lines[-1].strip() == "```" else lines[1:])
+
+
+def _normalize_quiz(data, message: str, chunks: list[dict]) -> dict:
+    if isinstance(data, list):
+        data = data[0] if data else {}
+    if not isinstance(data, dict):
+        data = {}
+
+    fallback = _fallback_quiz(message, chunks)
+    options = data.get("options")
+    if not isinstance(options, list) or not options:
+        options = fallback["options"]
+
+    return {
+        "type": data.get("type") or fallback["type"],
+        "question": data.get("question") or fallback["question"],
+        "options": options,
+        "answer": data.get("answer", fallback["answer"]),
+        "explanation": data.get("explanation") or fallback["explanation"],
+        "difficulty": data.get("difficulty") or fallback["difficulty"],
+        "knowledge_point": data.get("knowledge_point") or fallback["knowledge_point"],
+    }
 
 
 def _fallback_quiz(message: str, chunks: list[dict]) -> dict:

@@ -17,6 +17,14 @@ if (/v-if="activeModule\s*===/.test(mainLayout) || /v-else-if="activeModule\s*==
   failures.push('MainLayout should keep module components mounted with v-show instead of v-if/v-else-if.')
 }
 
+if (!mainLayout.includes('class="aa-panel workspace-stack"') || !mainLayout.includes('class="workspace-scroll"')) {
+  failures.push('Workspace chat and path panels should share one scrollable workspace container.')
+}
+
+if (!/\.workspace-scroll\s*\{[\s\S]*?overflow-y\s*:\s*auto\s*;[\s\S]*?\}/.test(mainLayout)) {
+  failures.push('Workspace stack should scroll internally instead of stretching the whole page.')
+}
+
 const bodyRule = theme.match(/body\s*\{[\s\S]*?\}/)?.[0] || ''
 if (/overflow\s*:\s*hidden\s*;/.test(bodyRule) || !/overflow-y\s*:\s*auto\s*;/.test(bodyRule)) {
   failures.push('Global body style should allow vertical page scrolling.')
