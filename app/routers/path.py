@@ -7,6 +7,7 @@ from typing import List, Optional
 from ..database import get_db
 from ..schemas import StudentProfile
 from ..services.profile_manager import get_profile
+from ..utils.jwt_handler import get_current_user
 from agents.planner import load_dag, topological_sort
 
 router = APIRouter(prefix="/path", tags=["学习路径"])
@@ -30,16 +31,15 @@ class PathResponse(BaseModel):
 
 @router.get("/get", response_model=PathResponse, summary="获取个性化学习路径")
 async def get_learning_path(
-    user_id: str = "demo_user",
     course: str = "computer_organization",
     db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     根据学生画像中的 weak_points，结合知识点 DAG 的拓扑排序，
     生成薄弱点优先的个性化学习路径。
     """
-    # 1. 查询画像
-    uid = 1 if user_id == "demo_user" else int(user_id) if user_id.isdigit() else 1
+    uid = user["user_id"]
     profile = get_profile(db, uid)
     weak_points = profile.weak_points if profile else []
 
@@ -66,7 +66,7 @@ async def get_learning_path(
         ))
 
     return PathResponse(
-        user_id=user_id,
+        user_id=str(uid),
         course=course,
         path=path,
         weak_points=weak_points,

@@ -3,36 +3,38 @@
     <p class="aa-kicker">Student Profile</p>
     <h2 class="aa-title">学生画像</h2>
 
-    <div class="avatar-ring">
-      <div class="avatar-core">徐</div>
-    </div>
+    <template v-if="displayProfile">
+      <div class="avatar-ring">
+        <div class="avatar-core">{{ displayProfile.major?.charAt(0) || '学' }}</div>
+      </div>
 
-    <h3>{{ displayProfile.major }} · {{ displayProfile.grade }}</h3>
-    <p class="goal">目标：{{ displayProfile.course_goal }}</p>
+      <h3>{{ displayProfile.major }} · {{ displayProfile.grade }}</h3>
+      <p class="goal">目标：{{ displayProfile.course_goal }}</p>
 
-    <div class="tag-group">
-      <span v-for="item in displayProfile.weak_points" :key="item" class="danger">{{ item }}</span>
-      <span v-for="item in displayProfile.learning_preference" :key="item">{{ item }}</span>
-      <span>{{ displayProfile.pace }}</span>
+      <div class="tag-group">
+        <span v-for="item in displayProfile.weak_points" :key="item" class="danger">{{ item }}</span>
+        <span v-for="item in displayProfile.learning_preference" :key="item">{{ item }}</span>
+        <span>{{ displayProfile.pace }}</span>
+      </div>
+    </template>
+    <div v-else class="profile-empty">
+      <p>尚未建立学习画像</p>
+      <p class="hint">在对话中描述你的专业、基础和薄弱点，系统会自动构建画像。</p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useUserStore } from '../stores/user'
 
 const userStore = useUserStore()
-const mockProfile = {
-  major: '计算机科学与技术',
-  grade: '大二',
-  course_goal: '两周内掌握 Cache、流水线和中断机制',
-  weak_points: ['Cache 映射方式', '流水线冲突'],
-  learning_preference: ['图解优先', '例题驱动', '代码示例'],
-  pace: '每日 1h'
-}
 
-const displayProfile = computed(() => userStore.profile || mockProfile)
+const displayProfile = computed(() => userStore.profile)
+
+onMounted(() => {
+  if (!userStore.profile) userStore.fetchProfile()
+})
 </script>
 
 <style scoped>
@@ -112,5 +114,18 @@ h3 {
     padding: 5px 7px;
     font-size: 11px;
   }
+}
+
+.profile-empty {
+  padding: 28px 8px;
+  color: var(--aa-muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.profile-empty .hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #8a9aac;
 }
 </style>

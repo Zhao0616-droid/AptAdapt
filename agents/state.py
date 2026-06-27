@@ -4,6 +4,7 @@ from typing import TypedDict, List, Optional, Dict, Any
 
 class AgentState(TypedDict):
     """多智能体协同工作流共享状态"""
+
     # 用户信息
     user_id: str
     message: str                          # 用户当前输入
@@ -16,7 +17,7 @@ class AgentState(TypedDict):
     retrieved_chunks: List[Dict[str, Any]]# RAG 检索结果
 
     # Supervisor 调度
-    task_type: Optional[str]              # 任务类型: profile / resource / quiz / path
+    task_type: Optional[str]              # 任务类型
     agent_sequence: List[str]             # Agent 调用序列
     current_agent: Optional[str]          # 当前执行的 Agent
 
@@ -33,6 +34,12 @@ class AgentState(TypedDict):
 
     # 学习路径
     learning_path: List[Dict[str, Any]]
+    completed_nodes: List[str]               # 已完成的知识点 ID 列表
+
+    # ── 执行追踪 (Week 2 Monday 新增) ──
+    execution_log: List[Dict[str, Any]]   # [{node, status, timestamp, duration_ms}]
+    step_index: int                       # 当前步骤在 agent_sequence 中的位置
+    total_steps: int                      # agent_sequence 总长度
 
     # 流程控制
     next_step: str                        # 下一步: supervisor / worker / reviewer / end

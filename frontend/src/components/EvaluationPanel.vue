@@ -43,34 +43,23 @@ const error = ref('')
 const evaluation = ref(null)
 let radar = null
 
-const fallbackEvaluation = {
-  overall_mastery: 0.76,
-  weak_points: ['Cache 映射方式', '流水线冲突', '中断机制'],
-  strong_points: ['ALU', '指令系统'],
-  mastery_list: [
-    { knowledge_point: 'Cache', mastery: 0.82, status: 'normal' },
-    { knowledge_point: '流水线', mastery: 0.64, status: 'normal' },
-    { knowledge_point: '中断', mastery: 0.58, status: 'weak' },
-    { knowledge_point: 'ALU', mastery: 0.9, status: 'strong' },
-    { knowledge_point: '指令', mastery: 0.74, status: 'normal' }
-  ],
-  suggestion: '建议优先巩固 Cache 映射方式、流水线冲突和中断机制。'
-}
+const displayEvaluation = computed(() => evaluation.value)
 
-const displayEvaluation = computed(() => evaluation.value || fallbackEvaluation)
+const metrics = computed(() => {
+  const ev = evaluation.value
+  return {
+    overallMastery: ev?.overall_mastery || 0,
+    strongCount: ev?.strong_points?.length || 0,
+    weakCount: ev?.weak_points?.length || 0
+  }
+})
 
-const metrics = computed(() => ({
-  overallMastery: displayEvaluation.value.overall_mastery || 0,
-  strongCount: displayEvaluation.value.strong_points?.length || 0,
-  weakCount: displayEvaluation.value.weak_points?.length || 0
-}))
-
-const suggestion = computed(() => displayEvaluation.value.suggestion || fallbackEvaluation.suggestion)
+const suggestion = computed(() => evaluation.value?.suggestion || '暂无评估数据，完成练习后系统将自动生成评估。')
 
 const statusText = computed(() => {
   if (loading.value) return '加载中'
-  if (error.value) return '演示数据'
-  return evaluation.value ? '后端数据' : '演示数据'
+  if (error.value) return '加载失败'
+  return evaluation.value ? '后端数据' : '暂无数据'
 })
 
 function percent(value) {
@@ -78,10 +67,7 @@ function percent(value) {
 }
 
 function chartData() {
-  const list = displayEvaluation.value.mastery_list?.length
-    ? displayEvaluation.value.mastery_list
-    : fallbackEvaluation.mastery_list
-
+  const list = displayEvaluation.value?.mastery_list || []
   return list.slice(0, 6).map(item => ({
     name: item.knowledge_point || '知识点',
     value: Math.round((Number(item.mastery) || 0) * 100)
@@ -93,6 +79,7 @@ function renderChart() {
   if (!radar) radar = echarts.init(radarEl.value)
 
   const data = chartData()
+  if (!data.length) return
   radar.setOption({
     color: ['#19bfea'],
     radar: {
@@ -116,7 +103,7 @@ async function loadEvaluation() {
   loading.value = true
   error.value = ''
   try {
-    const res = await getEvaluation('demo_user')
+    const res = await getEvaluation()
     evaluation.value = res.data
   } catch (e) {
     error.value = e.message || 'load evaluation failed'
@@ -129,7 +116,7 @@ async function loadEvaluation() {
 }
 
 onMounted(() => {
-  renderChart()
+  loadEvaluation()
   window.addEventListener('resize', renderChart)
 })
 

@@ -1,50 +1,93 @@
-"""VideoScript Agent — 生成短视频讲解脚本和分镜"""
+"""VideoScript Agent — 基于知识点和学生偏好，调用 LLM 生成短视频讲解脚本"""
+import json
+import logging
 from ..state import AgentState
+from ..utils import advance_agent
 
-SYSTEM_PROMPT = """你是视频脚本生成智能体。请根据知识点和学生偏好，生成 1-3 分钟的短视频讲解脚本。
+logger = logging.getLogger(__name__)
 
-输出格式（Markdown）：
+SYSTEM_PROMPT = """你是教育短视频脚本生成智能体。请根据知识点和学生画像，生成 1-3 分钟的短视频讲解脚本。
+
+要求：
+1. 时长控制在 1-3 分钟（共 3-5 个分镜）
+2. 每个分镜包含画面描述和旁白内容
+3. 语言生动有趣，适合短视频平台
+4. 根据学生的薄弱点重点展开
+5. 结尾有知识点总结
+
+输出格式（严格 Markdown，不要额外包装）：
 ## 视频标题
-### 第 N 镜（N 秒）
+### 第 1 镜（XX 秒）
+- 画面：画面描述
+- 旁白：旁白内容
+### 第 2 镜（XX 秒）
 - 画面：...
 - 旁白：...
 """
 
 
 def video_script_node(state: AgentState) -> AgentState:
-    """生成视频脚本（原型）"""
-    # TODO: 调用星火 API 生成实际脚本
-    script = """## Cache 映射方式 — 3 分钟讲解
+    """调用 LLM 生成视频脚本"""
+    message = state.get("message", "")
+    profile = state.get("profile", {})
+    chunks = state.get("retrieved_chunks", [])
 
-### 第 1 镜（15 秒）
-- 画面：Cache 与主存交互的动画示意图
-- 旁白：同学们好，今天我们来学习 Cache 的三种映射方式。
+    prompt = _build_prompt(message, profile, chunks)
 
-### 第 2 镜（45 秒）
-- 画面：直接映射示意图，动画展示模运算过程
-- 旁白：首先是直接映射，每个主存块只能映射到唯一的 Cache 行...
-
-### 第 3 镜（45 秒）
-- 画面：全相联映射与组相联映射对比图
-- 旁白：全相联映射允许任意位置存放，但硬件开销大...
-
-### 第 4 镜（30 秒）
-- 画面：三种映射方式对比表格
-- 旁白：总结一下，组相联映射是折中方案，也是现代处理器最常用的方式。"""
+    try:
+        from app.llm_client import SparkLLM
+        llm = SparkLLM()
+        script = llm.chat(prompt).strip()
+    except Exception as e:
+        logger.error("VideoScript Agent LLM 调用失败: %s", e)
+        script = _fallback_script(message, chunks)
 
     state["video_script"] = script
 
     resources = state.get("generated_resources", [])
-    resources.append({"type": "video_script", "title": "Cache 映射方式视频脚本", "content": script})
+    resources.append({"type": "video_script", "title": _derive_title(message, chunks), "content": script})
     state["generated_resources"] = resources
-    state["next_step"] = _next_in_sequence(state)
-    return state
+    return advance_agent(state)
 
 
-def _next_in_sequence(state: AgentState) -> str:
-    seq = state.get("agent_sequence", [])
-    current = state.get("current_agent", "")
-    if current in seq:
-        idx = seq.index(current)
-        return seq[idx + 1] if idx + 1 < len(seq) else "end"
-    return "end"
+def _build_prompt(message: str, profile: dict | None, chunks: list[dict]) -> str:
+    parts = [SYSTEM_PROMPT]
+    if profile:
+        parts.append(f"\n学生画像:\n{json.dumps(profile, ensure_ascii=False, indent=2)}")
+        if profile.get("weak_points"):
+            parts.append(f"薄弱点（需重点讲解）: {', '.join(profile['weak_points'])}")
+        if profile.get("learning_preference"):
+            parts.append(f"学习偏好: {', '.join(profile['learning_preference'])}")
+    if chunks:
+        parts.append("\n知识库片段（脚本素材）:")
+        for c in chunks:
+            parts.append(f"- [{c.get('id')}] {c.get('title')}: {c.get('content', '')[:300]}")
+    parts.append(f"\n请为以下知识点生成短视频脚本: {message}")
+    return "\n".join(parts)
+
+
+def _derive_title(message: str, chunks: list[dict]) -> str:
+    if chunks and chunks[0].get("title"):
+        return f"{chunks[0]['title']} — 短视频脚本"
+    return f"{message} — 短视频脚本"
+
+
+def _fallback_script(message: str, chunks: list[dict]) -> str:
+    """LLM 不可用时的降级脚本"""
+    title = chunks[0].get("title", message) if chunks else message
+    return f"""## {title} — 3 分钟讲解（离线模式）
+
+> LLM 服务暂时不可用，以下为基础脚本框架。
+
+### 第 1 镜（30 秒）
+- 画面：课程标题卡片 + 知识点关键词动画
+- 旁白：同学们好，今天我们来学习 {title}。
+
+### 第 2 镜（60 秒）
+- 画面：核心概念图解
+- 旁白：（请连接 AI 服务获取完整旁白）
+
+### 第 3 镜（30 秒）
+- 画面：知识要点总结卡片
+- 旁白：以上就是 {title} 的核心内容，同学们记得做练习题巩固哦。
+"""

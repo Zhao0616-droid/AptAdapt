@@ -25,7 +25,7 @@
 
       <div class="user-pill">
         <span class="pulse-dot"></span>
-        <span>徐英博 · 前端演示</span>
+        <span>{{ displayName }} · {{ courseStore.currentCourse?.name || 'AptAdapt' }}</span>
       </div>
     </header>
 
@@ -136,7 +136,7 @@
               <h3 class="aa-title">智能体运行状态</h3>
             </div>
           </div>
-          <AgentStatusBar />
+          <AgentStatusBar :agents="agentStatuses" />
         </section>
       </section>
 
@@ -163,8 +163,9 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useCourseStore } from '../stores/course'
+import { useUserStore } from '../stores/user'
 import ChatPanel from '../components/ChatPanel.vue'
 import PathTree from '../components/PathTree.vue'
 import ResourcePanel from '../components/ResourcePanel.vue'
@@ -173,58 +174,65 @@ import EvaluationPanel from '../components/EvaluationPanel.vue'
 import AgentStatusBar from '../components/AgentStatusBar.vue'
 
 const courseStore = useCourseStore()
+const userStore = useUserStore()
 const activeModule = ref('workspace')
 
-const navItems = [
-  {
-    key: 'workspace',
-    label: '学习工作台',
-    eyebrow: 'Learning Workspace',
-    title: '从学生画像开始组织个性化学习',
-    desc: '集中处理课程选择、学习画像、路径规划和对话式需求采集，作为整个系统的起点。',
-    stats: [
-      { label: '画像维度', value: '6 项' },
-      { label: '路径进度', value: '68%' },
-      { label: '当前课程', value: '计组' }
-    ]
-  },
-  {
-    key: 'resources',
-    label: '资源工厂',
-    eyebrow: 'Resource Factory',
-    title: '把知识点生成可学习、可练习的资源包',
-    desc: '统一展示讲解文档、思维导图、练习题、代码示例和视频脚本，便于演示资源生成闭环。',
-    stats: [
-      { label: '资源类型', value: '5 类' },
-      { label: '当前知识点', value: 'Cache' },
-      { label: '审核状态', value: '待审' }
-    ]
-  },
-  {
-    key: 'agents',
-    label: '智能体监控',
-    eyebrow: 'Agent Monitor',
-    title: '观察 Supervisor 协调下的多智能体流程',
-    desc: '把画像、检索、导图、练习和审核智能体拆开展示，让评委看清系统不是单一聊天框。',
-    stats: [
-      { label: '智能体', value: '5 个' },
-      { label: '运行中', value: '2 个' },
-      { label: '队列', value: '1 项' }
-    ]
-  },
-  {
-    key: 'evaluation',
-    label: '学习评估',
-    eyebrow: 'Learning Evaluation',
-    title: '用图表反馈掌握度和后续学习建议',
-    desc: '展示学生掌握度、练习正确率和薄弱点趋势，为下一轮路径规划提供依据。',
-    stats: [
-      { label: '完成度', value: '76%' },
-      { label: '正确率', value: '84%' },
-      { label: '薄弱点', value: '3 项' }
-    ]
-  }
-]
+const agentStatuses = ref([])
+
+const navItems = computed(() => {
+  const courseName = courseStore.currentCourse?.name || '计算机组成原理'
+  const shortName = courseName.length > 4 ? courseName.slice(0, 4) : courseName
+  return [
+    {
+      key: 'workspace',
+      label: '学习工作台',
+      eyebrow: 'Learning Workspace',
+      title: '从学生画像开始组织个性化学习',
+      desc: '集中处理课程选择、学习画像、路径规划和对话式需求采集，作为整个系统的起点。',
+      stats: [
+        { label: '画像维度', value: userStore.profile ? '6 项' : '待建立' },
+        { label: '路径进度', value: '--' },
+        { label: '当前课程', value: shortName }
+      ]
+    },
+    {
+      key: 'resources',
+      label: '资源工厂',
+      eyebrow: 'Resource Factory',
+      title: '把知识点生成可学习、可练习的资源包',
+      desc: '统一展示讲解文档、思维导图、练习题、代码示例和视频脚本，便于演示资源生成闭环。',
+      stats: [
+        { label: '资源类型', value: '5 类' },
+        { label: '当前课程', value: shortName },
+        { label: '审核状态', value: '待触发' }
+      ]
+    },
+    {
+      key: 'agents',
+      label: '智能体监控',
+      eyebrow: 'Agent Monitor',
+      title: '观察 Supervisor 协调下的多智能体流程',
+      desc: '把画像、检索、导图、练习和审核智能体拆开展示，让评委看清系统不是单一聊天框。',
+      stats: [
+        { label: '智能体', value: `${agentStatuses.value.length || 8} 个` },
+        { label: '运行中', value: `${agentStatuses.value.filter(a => a.status === 'running').length || 0} 个` },
+        { label: '空闲', value: `${agentStatuses.value.filter(a => a.status === 'idle').length || agentStatuses.value.length || '--'}` }
+      ]
+    },
+    {
+      key: 'evaluation',
+      label: '学习评估',
+      eyebrow: 'Learning Evaluation',
+      title: '用图表反馈掌握度和后续学习建议',
+      desc: '展示学生掌握度、练习正确率和薄弱点趋势，为下一轮路径规划提供依据。',
+      stats: [
+        { label: '掌握度', value: '--' },
+        { label: '正确率', value: '--' },
+        { label: '薄弱点', value: '--' }
+      ]
+    }
+  ]
+})
 
 const resourceSteps = [
   { no: '01', title: '选择知识点', desc: '从课程 DAG 或对话需求中确定本轮生成目标。' },
@@ -233,20 +241,37 @@ const resourceSteps = [
   { no: '04', title: '进入评估闭环', desc: '学生完成练习后更新画像与掌握度。' }
 ]
 
-const insights = [
-  { value: '优先', title: 'Cache 映射方式', desc: '建议继续用图解和例题区分直接映射、全相联和组相联。' },
-  { value: '补强', title: '流水线冲突', desc: '用表格整理结构冲突、数据冲突和控制冲突的处理方式。' },
-  { value: '巩固', title: '中断机制', desc: '结合 I/O 流程图理解中断响应、保护现场和恢复现场。' }
-]
+const insights = computed(() => {
+  const profile = userStore.profile
+  if (profile?.weak_points?.length) {
+    return profile.weak_points.map((wp, i) => ({
+      value: i === 0 ? '优先' : '补强',
+      title: wp,
+      desc: '系统根据画像识别，建议优先攻克该薄弱点。'
+    }))
+  }
+  return [
+    { value: '提示', title: '尚未建立学习画像', desc: '在对话中描述你的学习背景和薄弱点，系统会自动生成个性化建议。' }
+  ]
+})
 
 const currentModule = computed(() =>
-  navItems.find(item => item.key === activeModule.value) || navItems[0]
+  navItems.value.find(item => item.key === activeModule.value) || navItems.value[0]
 )
+
+const displayName = computed(() => {
+  if (userStore.profile?.name) return userStore.profile.name
+  if (userStore.profile?.major) return `${userStore.profile.major} 学生`
+  return '在线用户'
+})
 
 function handleCourseChange(courseId) {
   courseStore.switchCourse(courseId)
 }
 
+onMounted(() => {
+  courseStore.loadCourses()
+})
 </script>
 
 <style scoped>

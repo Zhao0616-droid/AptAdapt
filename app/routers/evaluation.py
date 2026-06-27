@@ -7,6 +7,7 @@ from typing import List, Optional
 from ..database import get_db
 from ..schemas import StudentProfile
 from ..services.profile_manager import get_profile
+from ..utils.jwt_handler import get_current_user
 
 router = APIRouter(prefix="/evaluation", tags=["学习评估"])
 
@@ -35,14 +36,14 @@ class EvaluationResponse(BaseModel):
 
 @router.get("/get", response_model=EvaluationResponse, summary="获取学习效果评估")
 async def get_evaluation(
-    user_id: str = "demo_user",
     db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     根据学生画像中的 mastery 和 weak_points，生成学习效果评估数据。
     当前为基础实现，进度数据为 mock，后续可接入真实学习记录。
     """
-    uid = 1 if user_id == "demo_user" else int(user_id) if user_id.isdigit() else 1
+    uid = user["user_id"]
     profile = get_profile(db, uid) or StudentProfile()
 
     mastery_dict = profile.mastery or {}
@@ -98,7 +99,7 @@ async def get_evaluation(
         suggestion = "继续保持学习节奏，多完成练习题以提升掌握度。"
 
     return EvaluationResponse(
-        user_id=user_id,
+        user_id=str(uid),
         overall_mastery=overall,
         weak_points=weak_points,
         strong_points=strong_points,

@@ -1,57 +1,89 @@
-"""Quiz Agent — 生成练习题（选择题/判断题/简答题）"""
+"""Quiz Agent — 基于知识点和学生画像，调用 LLM 生成练习题"""
+import json
+import logging
 from ..state import AgentState
+from ..utils import advance_agent
 
-SYSTEM_PROMPT = """你是练习题生成智能体。请根据知识点、难度等级和学生薄弱点，生成针对性练习题。
+logger = logging.getLogger(__name__)
 
-题目类型支持：
-1. 选择题 (choice)
-2. 判断题 (true_false)
-3. 简答题 (short_answer)
+SYSTEM_PROMPT = """你是《计算机组成原理》练习题生成智能体。请根据提供的知识库片段、难度等级和学生薄弱点，生成针对性练习题。
 
-输出格式（JSON）：
+题目类型: choice（选择题）/ true_false（判断题）/ short_answer（简答题）
+
+要求：
+1. 题目必须基于知识库片段内容，不得编造
+2. 针对薄弱点生成更多题目（2-3 题）
+3. 每道题必须有详细解析，说明为什么对/错
+4. 难度分为 easy / medium / hard，根据学生水平调整
+
+输出格式（严格 JSON，不要额外文字）：
 {
   "type": "choice",
   "question": "题目内容",
-  "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
+  "options": ["A. 选项1", "B. 选项2", "C. 选项3", "D. 选项4"],
   "answer": 0,
-  "explanation": "解析说明",
+  "explanation": "详细的解析说明，解释正确选项和错误选项的原因",
   "difficulty": "medium",
-  "knowledge_point": "Cache映射方式"
+  "knowledge_point": "知识点名称"
 }
 """
 
 
 def quiz_node(state: AgentState) -> AgentState:
-    """生成练习题（原型）"""
-    # TODO: 调用星火 API 生成实际题目
-    quiz = {
-        "type": "choice",
-        "question": "在 Cache 映射方式中，哪种方式的冲突率最高？",
-        "options": [
-            "A. 直接映射",
-            "B. 全相联映射",
-            "C. 组相联映射",
-            "D. 以上都相同"
-        ],
-        "answer": 0,
-        "explanation": "直接映射中每个主存块只能映射到唯一的 Cache 行，当多个主存块映射到同一 Cache 行时产生冲突，因此冲突率最高。",
-        "difficulty": "medium",
-        "knowledge_point": "Cache映射方式"
-    }
+    """调用 LLM 生成练习题"""
+    message = state.get("message", "")
+    profile = state.get("profile", {})
+    chunks = state.get("retrieved_chunks", [])
+
+    prompt = _build_prompt(message, profile, chunks)
+
+    try:
+        from app.llm_client import SparkLLM
+        llm = SparkLLM()
+        raw = llm.chat(prompt).strip()
+        if raw.startswith("```"):
+            lines = raw.split("\n")
+            raw = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+        quiz = json.loads(raw)
+    except Exception as e:
+        logger.error("Quiz Agent LLM 调用失败: %s", e)
+        quiz = _fallback_quiz(message, chunks)
 
     state["quiz_data"] = quiz
 
     resources = state.get("generated_resources", [])
-    resources.append({"type": "quiz", "title": "Cache 映射方式 练习题", "content": quiz})
+    resources.append({
+        "type": "quiz",
+        "title": f"{quiz.get('knowledge_point', message)} 练习题",
+        "content": quiz,
+    })
     state["generated_resources"] = resources
-    state["next_step"] = _next_in_sequence(state)
-    return state
+    return advance_agent(state)
 
 
-def _next_in_sequence(state: AgentState) -> str:
-    seq = state.get("agent_sequence", [])
-    current = state.get("current_agent", "")
-    if current in seq:
-        idx = seq.index(current)
-        return seq[idx + 1] if idx + 1 < len(seq) else "end"
-    return "end"
+def _build_prompt(message: str, profile: dict | None, chunks: list[dict]) -> str:
+    parts = [SYSTEM_PROMPT]
+    if profile:
+        parts.append(f"\n学生画像:\n{json.dumps(profile, ensure_ascii=False, indent=2)}")
+        if profile.get("weak_points"):
+            parts.append(f"薄弱点（需重点出题）: {', '.join(profile['weak_points'])}")
+    if chunks:
+        parts.append("\n知识库片段（出题依据）:")
+        for c in chunks:
+            parts.append(f"- [{c.get('id')}] {c.get('title')}: {c.get('content', '')[:300]}")
+    parts.append(f"\n请根据以上信息，为以下知识点生成一道练习题: {message}")
+    return "\n".join(parts)
+
+
+def _fallback_quiz(message: str, chunks: list[dict]) -> dict:
+    """LLM 不可用时的降级题目"""
+    title = chunks[0].get("title", message) if chunks else message
+    return {
+        "type": "choice",
+        "question": f"关于「{title}」，以下说法正确的是？",
+        "options": ["A. (请连接 AI 服务获取真实题目)", "B. 暂不可用", "C. 离线模式", "D. 请重试"],
+        "answer": 0,
+        "explanation": "当前 LLM 服务不可用，请稍后重试获取真实题目和解析。",
+        "difficulty": "medium",
+        "knowledge_point": title,
+    }

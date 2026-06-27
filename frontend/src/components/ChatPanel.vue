@@ -75,6 +75,31 @@ function fillPrompt(text) {
   input.value = text
 }
 
+function formatResponse(apiData) {
+  if (!apiData) return mockReply('')
+  const resources = apiData.resources || []
+  const review = apiData.review || {}
+  const taskType = apiData.task_type || ''
+
+  const doc = resources.find(r => r.type === 'doc')
+  if (doc && doc.content) {
+    let text = doc.content
+    if (review.notes && review.notes.length) {
+      text += '\n\n---\n**审核反馈**：' + review.notes.map(n => '\n- ' + n).join('')
+    }
+    return text
+  }
+
+  if (resources.length) {
+    const names = resources.map(r => '- **' + (r.title || r.type) + '**').join('\n')
+    return '## 已生成以下学习资源\n\n' + names + '\n\n' + (review.passed ? '审核通过' : '审核未通过')
+  }
+
+  if (taskType === 'profile') return '画像已更新。你可以继续描述学习情况，或直接提问知识点。'
+  if (taskType === 'path' || taskType === 'planner') return '学习路径已规划完成，请在右侧面板查看。'
+  return mockReply('')
+}
+
 function mockReply(userMsg) {
   return `已识别你的学习需求：**${userMsg}**
 
@@ -99,7 +124,7 @@ async function send() {
   try {
     const { sendMessage } = await import('../api/chat')
     const res = await sendMessage(userMsg, courseStore.currentId)
-    streamContent.value = res.data.data?.reply || res.data.reply || mockReply(userMsg)
+    streamContent.value = formatResponse(res.data.data)
   } catch {
     streamContent.value = mockReply(userMsg)
   } finally {

@@ -33,5 +33,5 @@ def login(user: UserCreate, db: Session = Depends(get_db)):
     if not pwd_context.verify(user.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     
-    access_token = create_access_token(data={"sub": user.username})
+    access_token = create_access_token(user_id=db_user.id, username=db_user.username)
     return Token(access_token=access_token)

@@ -8,6 +8,7 @@ from datetime import datetime
 from ..database import get_db
 from ..schemas import StudentProfile, ProfileResponse
 from ..services.profile_manager import get_profile, save_profile
+from ..utils.jwt_handler import get_current_user
 
 router = APIRouter(prefix="/quiz", tags=["练习题"])
 
@@ -76,8 +77,8 @@ def _update_mastery(profile: StudentProfile, answers: List[QuizAnswer]) -> Stude
 @router.post("/submit", response_model=QuizSubmitResponse, summary="提交练习题答案")
 async def submit_quiz(
     req: QuizSubmitRequest,
-    user_id: str = "demo_user",
     db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     接收学生练习题作答，判定正误，更新画像中对应知识点的掌握度，
@@ -86,7 +87,7 @@ async def submit_quiz(
     if not req.answers:
         raise HTTPException(status_code=400, detail="answers 不能为空")
 
-    uid = 1 if user_id == "demo_user" else int(user_id) if user_id.isdigit() else 1
+    uid = user["user_id"]
     profile = get_profile(db, uid) or StudentProfile()
 
     results = []
@@ -107,7 +108,7 @@ async def submit_quiz(
     save_profile(db, uid, updated_profile)
 
     return QuizSubmitResponse(
-        user_id=user_id,
+        user_id=str(uid),
         total=len(results),
         correct_count=correct_count,
         accuracy=accuracy,

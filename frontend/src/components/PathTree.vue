@@ -26,7 +26,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useCourseStore } from '../stores/course'
 import { getLearningPath } from '../api/path'
 
@@ -35,15 +35,7 @@ const loading = ref(false)
 const error = ref('')
 const remoteNodes = ref([])
 
-const fallbackNodes = [
-  { id: 'von_neumann', title: '冯·诺依曼结构', desc: '系统结构和指令流基础', status: 'done' },
-  { id: 'data_alu', title: '数据表示与 ALU', desc: '补齐定点数、浮点数与运算器', status: 'done' },
-  { id: 'cache_mapping', title: 'Cache 映射方式', desc: '重点突破直接映射、组相联', status: 'active' },
-  { id: 'pipeline_hazard', title: '流水线冲突', desc: '结构、数据与控制相关', status: 'pending' },
-  { id: 'interrupt_dma', title: '中断与 DMA', desc: '理解 I/O 协作机制', status: 'pending' }
-]
-
-const displayNodes = computed(() => remoteNodes.value.length ? remoteNodes.value : fallbackNodes)
+const displayNodes = computed(() => remoteNodes.value)
 
 const progress = computed(() => {
   const nodes = displayNodes.value
@@ -55,8 +47,8 @@ const progress = computed(() => {
 
 const sourceLabel = computed(() => {
   if (loading.value) return '正在同步后端学习路径...'
-  if (error.value) return '后端暂不可用，当前展示演示路径'
-  return remoteNodes.value.length ? '已接入后端个性化路径接口' : '演示路径'
+  if (error.value) return '后端暂不可用，请稍后重试'
+  return remoteNodes.value.length ? '已接入后端个性化路径接口' : '暂无学习路径，在对话中描述学习目标即可自动规划'
 })
 
 function normalizePath(path = []) {
@@ -85,7 +77,7 @@ async function loadPath() {
   loading.value = true
   error.value = ''
   try {
-    const res = await getLearningPath('demo_user', courseStore.currentId || 'computer_organization')
+    const res = await getLearningPath(courseStore.currentId || 'computer_organization')
     remoteNodes.value = normalizePath(res.data?.path || [])
   } catch (e) {
     error.value = e.message || 'load path failed'
@@ -94,6 +86,8 @@ async function loadPath() {
     loading.value = false
   }
 }
+
+onMounted(() => { loadPath() })
 </script>
 
 <style scoped>

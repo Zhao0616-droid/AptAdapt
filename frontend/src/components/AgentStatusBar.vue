@@ -11,13 +11,12 @@
 </template>
 
 <script setup>
-const agents = [
-  { name: 'Profile Agent', status: 'done', label: '画像已更新' },
-  { name: 'RAG Agent', status: 'running', label: '检索 Cache 片段' },
-  { name: 'MindMap Agent', status: 'running', label: '生成导图' },
-  { name: 'Quiz Agent', status: 'idle', label: '等待调用' },
-  { name: 'Reviewer Agent', status: 'idle', label: '排队审核' }
-]
+defineProps({
+  agents: {
+    type: Array,
+    default: () => []
+  }
+})
 </script>
 
 <style scoped>

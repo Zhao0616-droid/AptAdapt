@@ -1,9 +1,14 @@
-"""对话路由 — 画像抽取 → 知识检索 → LLM 生成（普通 + SSE 流式）
+"""对话路由 — 多智能体协同流程（Supervisor → Workers → Reviewer）
 
-每个阶段独立容错，单阶段失败不阻断后续阶段。
+完整 pipeline:
+  supervisor(意图识别) → profile(画像) → retrieve → worker(生成) → reviewer(审核) → 返回
+
+支持两种模式:
+  - /chat/send: 同步模式，等待全部 Agent 执行完毕返回
+  - /chat/stream: SSE 流式模式，实时推送每个 Agent 的状态变更
 """
 import json
-import traceback
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,10 +17,13 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..llm_client import SparkLLM
-from ..services.profile_manager import update_profile_from_conversation
+from ..services.profile_manager import get_profile, update_profile_from_conversation
 from ..services.retriever import retrieve
+from ..utils.jwt_handler import get_current_user
+from agents.graph import agent_graph
+from agents.state import AgentState
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -25,133 +33,193 @@ class ChatRequest(BaseModel):
     chapter: Optional[str] = None
 
 
-def _build_answer_prompt(message: str, profile: dict, chunks: list[dict]) -> str:
-    parts = []
+# ── 工厂函数 ──
 
-    if profile:
-        parts.append(f"学生画像: {json.dumps(profile, ensure_ascii=False)}")
-
-    if chunks:
-        sources = "\n".join(
-            f"[{c['id']}] {c['title']}: {c['content']}" for c in chunks
-        )
-        parts.append(f"课程知识库参考片段:\n{sources}")
-        parts.append("请基于上述知识库片段回答，如有引用请标注来源 ID。如知识库无法覆盖，请说明「依据不足」。")
-
-    parts.append(f"学生问题: {message}")
-    return "\n\n".join(parts)
-
-
-@router.post("/chat/send", summary="发送消息（普通模式）")
-async def send_message(req: ChatRequest, db: Session = Depends(get_db)):
-    """
-    完整 pipeline: 画像抽取 → 知识检索 → LLM 生成 → 返回。
-    每阶段独立容错，pipeline_errors 记录各阶段异常。
-    """
-    pipeline_errors: list[dict] = []
-    profile = None
-    chunks: list[dict] = []
-
-    # 1. 画像抽取（可降级）
+def _load_profile(db: Session, user_id: int) -> dict | None:
     try:
-        profile = update_profile_from_conversation(db, user_id=1, message=req.message)
+        p = get_profile(db, user_id=user_id)
+        return p.model_dump() if p else None
     except Exception as e:
-        pipeline_errors.append({"stage": "profile", "error": str(e)})
+        logger.warning("加载画像失败: %s", e)
+        return None
 
-    # 2. 知识库检索（可降级）
-    try:
-        chunks = retrieve(req.message, top_k=5, course_id=req.course)
-    except Exception as e:
-        pipeline_errors.append({"stage": "retrieve", "error": str(e)})
 
-    # 3. LLM 生成（不可降级 — 这是核心能力）
-    try:
-        prompt = _build_answer_prompt(
-            req.message,
-            profile.model_dump() if profile else None,
-            chunks,
-        )
-        llm = SparkLLM()
-        ai_response = llm.chat(prompt)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"LLM 调用失败: {str(e)}")
-
-    if not ai_response:
-        raise HTTPException(status_code=500, detail="AI 没有返回有效内容")
-
+def _make_initial_state(req: ChatRequest, user_id: int, profile: dict | None, chunks: list[dict]) -> AgentState:
     return {
-        "code": 200,
-        "message": "success",
-        "data": {
-            "reply": ai_response,
-            "retrieved_chunks": [{"id": c["id"], "title": c["title"]} for c in chunks],
-            "pipeline_errors": pipeline_errors or None,
-        },
+        "user_id": str(user_id),
+        "message": req.message,
+        "chapter": req.chapter,
+        "profile": profile,
+        "retrieved_chunks": chunks,
+        "task_type": None,
+        "agent_sequence": [],
+        "current_agent": None,
+        "generated_resources": [],
+        "mindmap_data": None,
+        "quiz_data": None,
+        "code_data": None,
+        "video_script": None,
+        "review_passed": None,
+        "review_notes": [],
+        "learning_path": [],
+        "completed_nodes": [],
+        "execution_log": [],
+        "step_index": 0,
+        "total_steps": 0,
+        "next_step": "supervisor",
+        "error": None,
     }
-
-
-@router.post("/chat/stream", summary="发送消息（SSE 流式模式）")
-async def send_message_stream(req: ChatRequest, db: Session = Depends(get_db)):
-    """SSE 流式: 画像 → 检索 → 流式生成，每阶段独立容错"""
-
-    def generate():
-        pipeline_errors = []
-        profile = None
-        chunks: list[dict] = []
-
-        # 1. 画像抽取
-        yield _sse("agent_status", {"agent": "Profile Agent", "status": "running",
-                   "message": "正在分析学习画像..."})
-        try:
-            profile = update_profile_from_conversation(db, user_id=1, message=req.message)
-            yield _sse("agent_status", {"agent": "Profile Agent", "status": "done",
-                       "message": "画像更新完成"})
-        except Exception as e:
-            pipeline_errors.append({"stage": "profile", "error": str(e)})
-            yield _sse("agent_status", {"agent": "Profile Agent", "status": "error",
-                       "message": f"画像抽取失败: {e}"})
-
-        # 2. 知识库检索
-        yield _sse("agent_status", {"agent": "Retriever", "status": "running",
-                   "message": "正在检索课程知识库..."})
-        try:
-            chunks = retrieve(req.message, top_k=5, course_id=req.course)
-            chunk_ids = [c["id"] for c in chunks]
-            yield _sse("agent_status", {"agent": "Retriever", "status": "done",
-                       "message": f"检索到 {len(chunks)} 个相关片段", "chunks": chunk_ids})
-        except Exception as e:
-            pipeline_errors.append({"stage": "retrieve", "error": str(e)})
-            chunk_ids = []
-            yield _sse("agent_status", {"agent": "Retriever", "status": "error",
-                       "message": f"知识库检索失败: {e}"})
-
-        # 3. 流式生成
-        try:
-            yield _sse("agent_status", {"agent": "Doc Agent", "status": "running",
-                       "message": "正在生成回复..."})
-            prompt = _build_answer_prompt(
-                req.message,
-                profile.model_dump() if profile else None,
-                chunks,
-            )
-            llm = SparkLLM()
-            for token in llm.chat_stream(prompt):
-                yield _sse("content", {"type": "markdown", "content": token})
-            yield _sse("agent_status", {"agent": "Doc Agent", "status": "done"})
-            yield _sse("done", {"message": "生成完成", "chunks": chunk_ids,
-                       "pipeline_errors": pipeline_errors or None})
-        except Exception:
-            yield _sse("error", {"message": traceback.format_exc(),
-                       "pipeline_errors": pipeline_errors})
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
 
 
 def _sse(event: str, data: dict) -> str:
     payload = json.dumps(data, ensure_ascii=False)
     return f"event: {event}\ndata: {payload}\n\n"
 
+
+# ── 同步模式 ──
+
+@router.post("/chat/send", summary="发送消息（多智能体同步模式）")
+async def send_message(
+    req: ChatRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """运行完整多智能体流程，返回所有生成资源 + 审核结果"""
+    uid = user["user_id"]
+    existing_profile = _load_profile(db, uid)
+
+    chunks: list[dict] = []
+    try:
+        chunks = retrieve(req.message, top_k=5, course_id=req.course)
+    except Exception as e:
+        logger.warning("知识库检索失败: %s", e)
+
+    initial_state = _make_initial_state(req, uid, existing_profile, chunks)
+
+    try:
+        result = agent_graph.invoke(initial_state)
+    except Exception as e:
+        logger.exception("多智能体流程执行失败")
+        raise HTTPException(status_code=500, detail=f"Agent 流程失败: {str(e)}")
+
+    if result.get("profile"):
+        try:
+            update_profile_from_conversation(db, user_id=uid, message=req.message)
+        except Exception:
+            pass
+
+    return {
+        "code": 200,
+        "message": "success",
+        "data": {
+            "task_type": result.get("task_type"),
+            "agent_sequence": result.get("agent_sequence", []),
+            "resources": result.get("generated_resources", []),
+            "mindmap": result.get("mindmap_data"),
+            "quiz": result.get("quiz_data"),
+            "code": result.get("code_data"),
+            "video_script": result.get("video_script"),
+            "learning_path": result.get("learning_path", []),
+            "review": {
+                "passed": result.get("review_passed"),
+                "notes": result.get("review_notes", []),
+            },
+            "retrieved_chunks": [
+                {"id": c["id"], "title": c.get("title", "")}
+                for c in result.get("retrieved_chunks", [])
+            ],
+            "error": result.get("error"),
+        },
+    }
+
+
+# ── SSE 流式模式 ──
+
+@router.post("/chat/stream", summary="发送消息（多智能体流式模式）")
+async def send_message_stream(
+    req: ChatRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """流式 SSE: 实时推送每个 Agent 节点的运行状态和最终结果"""
+
+    async def generate():
+        uid = user["user_id"]
+        existing_profile = _load_profile(db, uid)
+
+        chunks: list[dict] = []
+        try:
+            chunks = retrieve(req.message, top_k=5, course_id=req.course)
+            yield _sse("agent_status", {
+                "agent": "Retriever", "status": "done",
+                "message": f"检索到 {len(chunks)} 个相关片段",
+                "chunks": [c["id"] for c in chunks],
+            })
+        except Exception as e:
+            yield _sse("agent_status", {
+                "agent": "Retriever", "status": "error",
+                "message": f"检索失败: {e}",
+            })
+
+        initial_state = _make_initial_state(req, uid, existing_profile, chunks)
+        final_state = None
+
+        try:
+            for step_output in agent_graph.stream(initial_state):
+                node_name = list(step_output.keys())[0]
+                node_state = step_output[node_name]
+
+                yield _sse("agent_status", {
+                    "agent": node_name,
+                    "status": "running",
+                    "next_step": node_state.get("next_step", "end"),
+                    "task_type": node_state.get("task_type"),
+                    "agent_sequence": node_state.get("agent_sequence", []),
+                })
+
+                if node_name == "reviewer":
+                    yield _sse("review", {
+                        "passed": node_state.get("review_passed"),
+                        "notes": node_state.get("review_notes", []),
+                    })
+
+                if node_name == "doc":
+                    for r in node_state.get("generated_resources", []):
+                        if r.get("type") == "doc":
+                            yield _sse("content", {
+                                "type": "doc",
+                                "title": r.get("title"),
+                                "content": r.get("content"),
+                            })
+
+                final_state = node_state
+
+        except Exception:
+            logger.exception("Agent 流式执行异常")
+            yield _sse("error", {"message": "Agent 流程执行失败，请重试"})
+            return
+
+        if final_state:
+            yield _sse("done", {
+                "message": "处理完成",
+                "task_type": final_state.get("task_type"),
+                "resources": [
+                    {"type": r.get("type"), "title": r.get("title")}
+                    for r in final_state.get("generated_resources", [])
+                ],
+                "review_passed": final_state.get("review_passed"),
+                "review_notes": final_state.get("review_notes", []),
+                "retrieved_chunks": [
+                    c["id"] for c in final_state.get("retrieved_chunks", [])
+                ],
+            })
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )

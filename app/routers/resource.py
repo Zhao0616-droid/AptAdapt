@@ -7,12 +7,17 @@ from ..schemas import ResourceGenerateRequest, ResourceGenerateResponse
 from ..services.profile_manager import get_profile
 from ..services.retriever import retrieve
 from ..services.resource_generator import generate_resources
+from ..utils.jwt_handler import get_current_user
 
 router = APIRouter(prefix="/resource", tags=["资源生成"])
 
 
 @router.post("/generate", response_model=ResourceGenerateResponse, summary="生成个性化学习资源")
-async def generate(req: ResourceGenerateRequest, db: Session = Depends(get_db)):
+async def generate(
+    req: ResourceGenerateRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """
     按知识点和学生画像生成个性化学习资源。
 
@@ -33,8 +38,7 @@ async def generate(req: ResourceGenerateRequest, db: Session = Depends(get_db)):
     if invalid:
         raise HTTPException(status_code=400, detail=f"不支持的资源类型: {invalid}")
 
-    # 1. 查询画像
-    uid = 1 if req.user_id == "demo_user" else int(req.user_id) if req.user_id.isdigit() else 1
+    uid = user["user_id"]
     profile = get_profile(db, uid)
 
     # 2. 检索知识库
