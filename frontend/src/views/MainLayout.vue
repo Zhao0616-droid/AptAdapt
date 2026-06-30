@@ -204,7 +204,7 @@ const pathPaneHeight = ref(DEFAULT_WORKSPACE_PANE_HEIGHT)
 let resizeState = null
 
 const agentStatuses = computed(() => workspaceStore.agentStatuses)
-const activeAgentCount = computed(() => agentStatuses.value.filter(a => a.active && a.status !== 'idle').length)
+const activeAgentCount = computed(() => agentStatuses.value.filter(a => a.status !== 'idle' && a.status !== 'error').length)
 const runningCount = computed(() => activeAgentCount.value)
 const errorCount = computed(() => agentStatuses.value.filter(a => a.status === 'error').length)
 const idleCount = computed(() => Math.max(agentStatuses.value.length - runningCount.value - errorCount.value, 0))

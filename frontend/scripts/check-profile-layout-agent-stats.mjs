@@ -19,7 +19,10 @@ assert(mainLayout.includes('DEFAULT_WORKSPACE_PANE_HEIGHT'), 'Workspace panes sh
 assert(mainLayout.includes('chatPaneHeight = ref(DEFAULT_WORKSPACE_PANE_HEIGHT)'), 'Chat pane should start from the shared default height.')
 assert(mainLayout.includes('pathPaneHeight = ref(DEFAULT_WORKSPACE_PANE_HEIGHT)'), 'Path pane should start from the shared default height.')
 assert(mainLayout.includes('activeAgentCount'), 'Agent stats should count active/done agents, not only literal running status.')
-assert(mainLayout.includes('agentStatuses.value.filter(a => a.active && a.status !=='), 'Active agent count should include completed participating agents.')
+assert(
+  mainLayout.includes("agentStatuses.value.filter(a => a.status !== 'idle' && a.status !== 'error').length"),
+  'Active agent count should match visible running/done agent statuses.'
+)
 assert(mainLayout.includes('grid-template-rows: auto minmax(0, 1fr)'), 'Left course/profile column should stretch the profile card to match the workbench height.')
 
 assert(userStore.includes('dedupeSimilarItems'), 'Frontend profile normalization should remove similar duplicate tags.')

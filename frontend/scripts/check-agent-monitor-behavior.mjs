@@ -16,6 +16,13 @@ assert(/const names\s*=\s*ALL_AGENT_NAMES/.test(workspaceStore), 'Agent monitor 
 assert(workspaceStore.includes('active: agentSequence.value.includes(name)'), 'Agent status should expose whether an agent participated in the latest run.')
 assert(workspaceStore.includes("status: log?.status || 'idle'"), 'Agents without execution logs should remain visible as idle.')
 assert(mainLayout.includes('activeAgentCount'), 'MainLayout should count active/done participants in the top agent stats.')
-assert(mainLayout.includes('agentStatuses.value.filter(a => a.active && a.status !=='), 'Agent running stat should not show zero while completed participants are visible.')
+assert(
+  mainLayout.includes("agentStatuses.value.filter(a => a.status !== 'idle' && a.status !== 'error').length"),
+  'Top running count should match visible green/running status dots, even if agent_sequence omits a logged agent.'
+)
+assert(
+  !mainLayout.includes('agentStatuses.value.filter(a => a.active && a.status !=='),
+  'Top running count must not depend on agent_sequence membership because execution_log is the visible source of truth.'
+)
 
 console.log('Agent monitor keeps the full topology visible.')
