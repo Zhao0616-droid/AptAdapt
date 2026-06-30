@@ -25,7 +25,7 @@
 
       <div class="user-pill">
         <span class="pulse-dot"></span>
-        <span>{{ displayName }} · {{ courseStore.currentCourse?.name || 'AptAdapt' }}</span>
+        <span class="user-pill-text">{{ displayName }} · {{ courseStore.currentCourse?.name || 'AptAdapt' }}</span>
         <button type="button" class="logout-button" @click="handleLogout">退出</button>
       </div>
     </header>
@@ -82,13 +82,29 @@
         </aside>
 
         <section class="aa-panel workspace-stack">
-          <div class="workspace-scroll">
+          <div class="workspace-stack-tools">
+            <span>对话与路径工作区</span>
+            <button type="button" @click="handleChatOnlyRefresh">重新对话</button>
+          </div>
+          <div class="workspace-scroll" :style="workspacePaneStyle">
             <section class="stack-pane chat-pane">
               <ChatPanel />
             </section>
+            <div
+              class="pane-resizer"
+              role="separator"
+              aria-label="调整对话框高度"
+              @pointerdown="startChatResize"
+            ></div>
             <section class="stack-pane path-pane">
               <PathTree />
             </section>
+            <div
+              class="pane-resizer path-bottom-resizer"
+              role="separator"
+              aria-label="调整个性化路径高度"
+              @pointerdown="startPathResize"
+            ></div>
           </div>
         </section>
       </section>
@@ -165,7 +181,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCourseStore } from '../stores/course'
 import { useUserStore } from '../stores/user'
@@ -182,12 +198,23 @@ const userStore = useUserStore()
 const workspaceStore = useWorkspaceStore()
 const router = useRouter()
 const activeModule = ref('workspace')
+const DEFAULT_WORKSPACE_PANE_HEIGHT = 380
+const chatPaneHeight = ref(DEFAULT_WORKSPACE_PANE_HEIGHT)
+const pathPaneHeight = ref(DEFAULT_WORKSPACE_PANE_HEIGHT)
+let resizeState = null
 
 const agentStatuses = computed(() => workspaceStore.agentStatuses)
+const activeAgentCount = computed(() => agentStatuses.value.filter(a => a.active && a.status !== 'idle').length)
+const runningCount = computed(() => activeAgentCount.value)
+const errorCount = computed(() => agentStatuses.value.filter(a => a.status === 'error').length)
+const idleCount = computed(() => Math.max(agentStatuses.value.length - runningCount.value - errorCount.value, 0))
+const workspacePaneStyle = computed(() => ({
+  '--chat-pane-height': `${chatPaneHeight.value}px`,
+  '--path-pane-height': `${pathPaneHeight.value}px`
+}))
 
 const navItems = computed(() => {
   const courseName = courseStore.currentCourse?.name || '计算机组成原理'
-  const shortName = courseName.length > 4 ? courseName.slice(0, 4) : courseName
   return [
     {
       key: 'workspace',
@@ -198,7 +225,7 @@ const navItems = computed(() => {
       stats: [
         { label: '画像维度', value: userStore.profile ? '6 项' : '待建立' },
         { label: '路径进度', value: '--' },
-        { label: '当前课程', value: shortName }
+        { label: '当前课程', value: courseName }
       ]
     },
     {
@@ -209,7 +236,7 @@ const navItems = computed(() => {
       desc: '统一展示讲解文档、思维导图、练习题、代码示例和视频脚本，便于演示资源生成闭环。',
       stats: [
         { label: '资源类型', value: '5 类' },
-        { label: '当前课程', value: shortName },
+        { label: '当前课程', value: courseName },
         { label: '审核状态', value: '待触发' }
       ]
     },
@@ -221,8 +248,8 @@ const navItems = computed(() => {
       desc: '把画像、检索、导图、练习和审核智能体拆开展示，让评委看清系统不是单一聊天框。',
       stats: [
         { label: '智能体', value: `${agentStatuses.value.length || 8} 个` },
-        { label: '运行中', value: `${agentStatuses.value.filter(a => a.status === 'running').length || 0} 个` },
-        { label: '空闲', value: `${agentStatuses.value.filter(a => a.status === 'idle').length || agentStatuses.value.length || '--'}` }
+        { label: '运行中', value: `${runningCount.value} 个` },
+        { label: '空闲', value: `${idleCount.value} 个` }
       ]
     },
     {
@@ -273,6 +300,16 @@ const displayName = computed(() => {
 
 function handleCourseChange(courseId) {
   courseStore.switchCourse(courseId)
+  applyCourseContext(courseId)
+}
+
+function applyCourseContext(courseId = courseStore.currentId) {
+  userStore.applyCoursePersona(courseId)
+  window.dispatchEvent(new CustomEvent('aptadapt:chat-reset', { detail: { courseId } }))
+}
+
+function handleChatOnlyRefresh() {
+  window.dispatchEvent(new CustomEvent('aptadapt:chat-reset', { detail: { courseId: courseStore.currentId } }))
 }
 
 function handleLogout() {
@@ -280,9 +317,61 @@ function handleLogout() {
   router.push('/login')
 }
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function startPaneResize(event, target) {
+  event.preventDefault()
+  event.currentTarget?.setPointerCapture?.(event.pointerId)
+  resizeState = {
+    target,
+    startY: event.clientY,
+    startChatHeight: chatPaneHeight.value,
+    startPathHeight: pathPaneHeight.value
+  }
+  document.body.classList.add('workspace-resizing')
+  window.addEventListener('pointermove', handlePaneResize)
+  window.addEventListener('pointerup', stopPaneResize, { once: true })
+  window.addEventListener('pointercancel', stopPaneResize, { once: true })
+}
+
+function startChatResize(event) {
+  startPaneResize(event, 'chat')
+}
+
+function startPathResize(event) {
+  startPaneResize(event, 'path')
+}
+
+function handlePaneResize(event) {
+  if (!resizeState) return
+  const deltaY = event.clientY - resizeState.startY
+  if (resizeState.target === 'chat') {
+    chatPaneHeight.value = clamp(resizeState.startChatHeight + deltaY, 340, 780)
+    return
+  }
+  pathPaneHeight.value = clamp(resizeState.startPathHeight + deltaY, 240, 720)
+}
+
+function stopPaneResize() {
+  resizeState = null
+  document.body.classList.remove('workspace-resizing')
+  window.removeEventListener('pointermove', handlePaneResize)
+}
+
 onMounted(() => {
   courseStore.loadCourses()
-  userStore.fetchProfile().catch(() => {})
+  workspaceStore.resetForCourse(courseStore.currentId)
+  if (localStorage.getItem('demoMode') === '1') {
+    userStore.applyCoursePersona(courseStore.currentId)
+  } else {
+    userStore.fetchProfile().catch(() => {})
+  }
+})
+
+onBeforeUnmount(() => {
+  stopPaneResize()
 })
 </script>
 
@@ -382,6 +471,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
   padding: 10px 14px;
   border-radius: 8px;
   border: 1px solid rgba(39, 201, 148, 0.22);
@@ -390,7 +481,15 @@ onMounted(() => {
   font-weight: 700;
 }
 
+.user-pill-text {
+  min-width: 0;
+  max-width: min(360px, 42vw);
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
 .logout-button {
+  flex: 0 0 auto;
   height: 26px;
   padding: 0 8px;
   border: 0;
@@ -477,6 +576,7 @@ onMounted(() => {
 
 .workspace-grid {
   grid-template-columns: 300px minmax(0, 1fr);
+  align-items: stretch;
 }
 
 .resource-grid {
@@ -493,7 +593,13 @@ onMounted(() => {
 
 .side-column {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 18px;
+  height: 100%;
+}
+
+.side-column > .aa-panel:last-child {
+  min-height: 0;
 }
 
 .course-panel,
@@ -516,11 +622,39 @@ onMounted(() => {
   overflow: hidden;
 }
 
+.workspace-stack-tools {
+  height: 42px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(89, 128, 176, 0.12);
+  background: rgba(250, 253, 255, 0.72);
+}
+
+.workspace-stack-tools span {
+  color: var(--aa-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.workspace-stack-tools button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(64, 184, 230, 0.2);
+  border-radius: 8px;
+  color: #1b6c89;
+  background: rgba(229, 249, 255, 0.78);
+  cursor: pointer;
+  font-weight: 800;
+}
+
 .workspace-scroll {
-  height: min(760px, calc(100vh - 260px));
+  height: min(760px, calc(100vh - 302px));
   min-height: 620px;
-  display: grid;
-  grid-template-rows: minmax(360px, 1fr) minmax(240px, 0.72fr);
+  display: flex;
+  flex-direction: column;
   gap: 0;
   overflow-y: auto;
 }
@@ -531,11 +665,51 @@ onMounted(() => {
 }
 
 .chat-pane {
+  height: var(--chat-pane-height);
+  flex: 0 0 auto;
   border-bottom: 1px solid rgba(89, 128, 176, 0.12);
 }
 
 .path-pane {
+  height: var(--path-pane-height);
+  flex: 0 0 auto;
   background: rgba(250, 253, 255, 0.62);
+}
+
+.pane-resizer {
+  position: relative;
+  height: 10px;
+  cursor: row-resize;
+  background: rgba(237, 246, 255, 0.82);
+  border-top: 1px solid rgba(89, 128, 176, 0.12);
+  border-bottom: 1px solid rgba(89, 128, 176, 0.12);
+  touch-action: none;
+}
+
+.pane-resizer::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 64px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(25, 191, 234, 0.38);
+  transform: translate(-50%, -50%);
+}
+
+.pane-resizer:hover::before {
+  background: rgba(25, 191, 234, 0.75);
+}
+
+.path-bottom-resizer {
+  flex: 0 0 auto;
+  border-bottom: 0;
+}
+
+:global(body.workspace-resizing) {
+  cursor: row-resize;
+  user-select: none;
 }
 
 .section-head {
@@ -728,7 +902,6 @@ onMounted(() => {
   .workspace-scroll {
     height: auto;
     min-height: 0;
-    grid-template-rows: minmax(460px, 60vh) minmax(260px, auto);
   }
 }
 </style>

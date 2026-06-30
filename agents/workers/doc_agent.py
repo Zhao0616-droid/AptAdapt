@@ -2,7 +2,7 @@
 import json
 import logging
 from ..state import AgentState
-from ..utils import advance_agent
+from ..utils import advance_agent, record_llm_error
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ def doc_node(state: AgentState) -> AgentState:
         content = llm.chat(prompt)
     except Exception as e:
         logger.error("Doc Agent LLM 调用失败: %s", e)
+        record_llm_error(state, "Doc Agent", e)
         content = _fallback_content(message, profile, chunks)
 
     doc = {

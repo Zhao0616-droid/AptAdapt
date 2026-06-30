@@ -36,25 +36,74 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import * as echarts from 'echarts'
 import { getEvaluation } from '../api/evaluation'
+import { useCourseStore } from '../stores/course'
 
 const radarEl = ref(null)
+const courseStore = useCourseStore()
 const loading = ref(false)
 const error = ref('')
 const source = ref('demo')
-const evaluation = ref({
-  overall_mastery: 0.68,
-  weak_points: ['Cache 映射方式', '流水线冲突'],
-  strong_points: ['数据表示', '指令系统'],
-  mastery_list: [
-    { knowledge_point: '数据表示', mastery: 0.86, status: 'strong' },
-    { knowledge_point: '指令系统', mastery: 0.78, status: 'normal' },
-    { knowledge_point: '存储系统', mastery: 0.65, status: 'normal' },
-    { knowledge_point: 'Cache 映射', mastery: 0.42, status: 'weak' },
-    { knowledge_point: '流水线冲突', mastery: 0.38, status: 'weak' }
-  ],
-  suggestion: '演示数据：建议先巩固 Cache 映射方式，再补充流水线冲突练习。'
-})
+const evaluation = ref(getDemoEvaluation(courseStore.currentId))
 let radar = null
+let resizeObserver = null
+
+function getDemoEvaluation(courseId) {
+  const evaluations = {
+    computer_organization: {
+      overall_mastery: 0.68,
+      weak_points: ['Cache 映射方式', '流水线冲突'],
+      strong_points: ['数据表示', '指令系统'],
+      mastery_list: [
+        { knowledge_point: '数据表示', mastery: 0.86, status: 'strong' },
+        { knowledge_point: '指令系统', mastery: 0.78, status: 'normal' },
+        { knowledge_point: '存储系统', mastery: 0.65, status: 'normal' },
+        { knowledge_point: 'Cache 映射', mastery: 0.42, status: 'weak' },
+        { knowledge_point: '流水线冲突', mastery: 0.38, status: 'weak' }
+      ],
+      suggestion: '演示数据：建议先巩固 Cache 映射方式，再补充流水线冲突练习。'
+    },
+    data_structure: {
+      overall_mastery: 0.61,
+      weak_points: ['二叉树遍历', '图的最短路径', '快速排序'],
+      strong_points: ['线性表', '栈与队列'],
+      mastery_list: [
+        { knowledge_point: '线性表', mastery: 0.82, status: 'strong' },
+        { knowledge_point: '栈与队列', mastery: 0.74, status: 'normal' },
+        { knowledge_point: '二叉树遍历', mastery: 0.36, status: 'weak' },
+        { knowledge_point: '图的最短路径', mastery: 0.31, status: 'weak' },
+        { knowledge_point: '快速排序', mastery: 0.48, status: 'weak' }
+      ],
+      suggestion: '演示数据：建议先用手算例题攻克二叉树遍历，再进入图算法。'
+    },
+    operating_system: {
+      overall_mastery: 0.63,
+      weak_points: ['进程同步', '页面置换算法', '死锁检测'],
+      strong_points: ['操作系统概述'],
+      mastery_list: [
+        { knowledge_point: '操作系统概述', mastery: 0.88, status: 'strong' },
+        { knowledge_point: '进程调度', mastery: 0.66, status: 'normal' },
+        { knowledge_point: '进程同步', mastery: 0.4, status: 'weak' },
+        { knowledge_point: '页面置换算法', mastery: 0.44, status: 'weak' },
+        { knowledge_point: '死锁检测', mastery: 0.35, status: 'weak' }
+      ],
+      suggestion: '演示数据：建议用流程图推演进程同步，再练习页面置换表格题。'
+    },
+    computer_network: {
+      overall_mastery: 0.6,
+      weak_points: ['子网划分', 'TCP 拥塞控制', '路由选择算法'],
+      strong_points: ['网络概述'],
+      mastery_list: [
+        { knowledge_point: '网络概述', mastery: 0.8, status: 'normal' },
+        { knowledge_point: '数据链路层', mastery: 0.62, status: 'normal' },
+        { knowledge_point: '子网划分', mastery: 0.34, status: 'weak' },
+        { knowledge_point: 'TCP 拥塞控制', mastery: 0.37, status: 'weak' },
+        { knowledge_point: '路由选择算法', mastery: 0.46, status: 'weak' }
+      ],
+      suggestion: '演示数据：建议先练子网掩码计算，再结合抓包理解 TCP 拥塞控制。'
+    }
+  }
+  return evaluations[courseId] || evaluations.computer_organization
+}
 
 const displayEvaluation = computed(() => evaluation.value)
 
@@ -94,22 +143,55 @@ function renderChart() {
   const data = chartData()
   if (!data.length) return
   radar.setOption({
-    color: ['#19bfea'],
-    radar: {
-      radius: '64%',
-      splitNumber: 4,
-      axisName: { color: '#60788e' },
-      splitLine: { lineStyle: { color: 'rgba(89,128,176,.16)' } },
-      splitArea: { areaStyle: { color: ['rgba(25,191,234,.04)', 'rgba(39,201,148,.04)'] } },
-      axisLine: { lineStyle: { color: 'rgba(89,128,176,.16)' } },
-      indicator: data.map(item => ({ name: item.name, max: 100 }))
+    color: ['#19bfea', '#27c994'],
+    tooltip: {
+      trigger: 'axis',
+      valueFormatter: value => `${value}%`
+    },
+    grid: {
+      left: 18,
+      right: 18,
+      top: 34,
+      bottom: 18,
+      containLabel: true
+    },
+    xAxis: {
+      type: 'value',
+      max: 100,
+      axisLabel: { formatter: '{value}%', color: '#60788e' },
+      splitLine: { lineStyle: { color: 'rgba(89,128,176,.14)' } }
+    },
+    yAxis: {
+      type: 'category',
+      inverse: true,
+      data: data.map(item => item.name),
+      axisLabel: {
+        color: '#31516c',
+        width: 96,
+        overflow: 'truncate'
+      },
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: 'rgba(89,128,176,.14)' } }
     },
     series: [{
-      type: 'radar',
-      areaStyle: { opacity: 0.55 },
-      data: [{ value: data.map(item => item.value), name: '掌握度' }]
+      name: '掌握度',
+      type: 'bar',
+      data: data.map(item => item.value),
+      barWidth: 18,
+      itemStyle: {
+        borderRadius: [0, 8, 8, 0],
+        color: params => params.value < 50 ? '#ff7cac' : params.value >= 80 ? '#27c994' : '#19bfea'
+      },
+      label: {
+        show: true,
+        position: 'right',
+        formatter: '{c}%',
+        color: '#31516c',
+        fontWeight: 700
+      }
     }]
   })
+  radar.resize()
 }
 
 async function loadEvaluation() {
@@ -138,15 +220,31 @@ async function loadEvaluation() {
   }
 }
 
-onMounted(() => {
+async function handleCourseChanged(event) {
+  const courseId = event.detail?.courseId || courseStore.currentId
+  evaluation.value = getDemoEvaluation(courseId)
+  source.value = 'demo'
+  error.value = ''
+  await nextTick()
+  renderChart()
   loadEvaluation()
-  window.addEventListener('resize', renderChart)
+}
+
+onMounted(() => {
+  nextTick(() => {
+    renderChart()
+    resizeObserver = new ResizeObserver(() => radar?.resize())
+    if (radarEl.value) resizeObserver.observe(radarEl.value)
+  })
+  window.setTimeout(loadEvaluation, 120)
   window.addEventListener('aptadapt:evaluation-refresh', loadEvaluation)
+  window.addEventListener('aptadapt:course-changed', handleCourseChanged)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', renderChart)
+  resizeObserver?.disconnect()
   window.removeEventListener('aptadapt:evaluation-refresh', loadEvaluation)
+  window.removeEventListener('aptadapt:course-changed', handleCourseChanged)
   radar?.dispose()
 })
 </script>
@@ -182,7 +280,8 @@ onBeforeUnmount(() => {
 
 .chart {
   width: 100%;
-  height: 360px;
+  height: clamp(420px, 48vh, 620px);
+  min-height: 420px;
 }
 
 .metric-list {
@@ -232,7 +331,8 @@ onBeforeUnmount(() => {
   }
 
   .chart {
-    height: 300px;
+    height: 380px;
+    min-height: 380px;
   }
 }
 </style>

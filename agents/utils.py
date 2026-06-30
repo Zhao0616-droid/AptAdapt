@@ -1,12 +1,9 @@
-"""Agent 共享工具函数"""
+"""Shared helpers for agent workflow state."""
 from .state import AgentState
 
 
 def next_in_sequence(state: AgentState) -> str:
-    """
-    根据 agent_sequence 和当前 next_step（即当前节点名），
-    返回序列中的下一个节点名。无后续节点返回 'end'。
-    """
+    """Return the next node in agent_sequence after current next_step."""
     seq = state.get("agent_sequence", [])
     current = state.get("next_step", "")
     if current in seq:
@@ -16,7 +13,15 @@ def next_in_sequence(state: AgentState) -> str:
 
 
 def advance_agent(state: AgentState) -> AgentState:
-    """将 state 的 next_step 推进到序列中的下一个 agent，并更新 current_agent"""
+    """Advance next_step to the next agent."""
     state["current_agent"] = state.get("next_step", "")
     state["next_step"] = next_in_sequence(state)
     return state
+
+
+def record_llm_error(state: AgentState, agent: str, error: Exception) -> None:
+    """Keep provider failures visible instead of hiding them behind fallback content."""
+    errors = state.get("llm_errors", [])
+    errors.append(f"{agent}: {error}")
+    state["llm_errors"] = errors
+    state["error"] = str(error)

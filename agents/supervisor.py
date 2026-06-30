@@ -137,8 +137,15 @@ def supervisor_node(state: AgentState) -> AgentState:
     """
     message = state.get("message", "")
 
-    # 先尝试 LLM 分析，失败自动降级关键词
-    task_type, agent_sequence, reasoning = classify_by_llm(message)
+    try:
+        from app.config import SUPERVISOR_USE_LLM
+    except Exception:
+        SUPERVISOR_USE_LLM = False
+
+    if SUPERVISOR_USE_LLM:
+        task_type, agent_sequence, reasoning = classify_by_llm(message)
+    else:
+        task_type, agent_sequence, reasoning = classify_by_keywords(message)
 
     logger.info("Supervisor: task=%s, seq=%s, reason=%s", task_type, agent_sequence, reasoning)
 

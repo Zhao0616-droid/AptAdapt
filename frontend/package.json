@@ -9,7 +9,14 @@
     "preview": "vite preview",
     "check:api": "node scripts/check-api-contract.mjs",
     "check:garbled": "node scripts/check-garbled-text.mjs",
-    "check:workspace": "node scripts/check-workspace-behavior.mjs"
+    "check:workspace": "node scripts/check-workspace-behavior.mjs",
+    "check:course": "node scripts/check-course-switch-behavior.mjs",
+    "check:agents": "node scripts/check-agent-monitor-behavior.mjs",
+    "check:ui-iteration": "node scripts/check-ui-iteration-behavior.mjs",
+    "check:quiz": "node scripts/check-quiz-workflow-behavior.mjs",
+    "check:resize": "node scripts/check-workspace-resize-chat-scope.mjs",
+    "check:demo-token": "node scripts/check-demo-token-contract.mjs",
+    "check:profile-layout": "node scripts/check-profile-layout-agent-stats.mjs"
   },
   "dependencies": {
     "vue": "^3.4.0",

@@ -1,4 +1,4 @@
-"""测试讯飞 API 密钥是否有效"""
+"""Test whether the configured XFYUN credentials can access chat and embedding APIs."""
 import sys
 from pathlib import Path
 
@@ -16,16 +16,14 @@ print(f"  API_KEY: {config.XFYUN_API_KEY[:6]}...")
 print(f"  API_SECRET: {config.XFYUN_API_SECRET[:6]}...")
 print("=" * 50)
 
-# 测试 Chat API
 print("\n[1] 测试 Chat API ...")
 try:
     llm = SparkLLM()
-    resp = llm.chat("你好")
-    print(f"  Chat API 成功，返回: {resp[:50]}...")
+    resp = llm.chat("你好，请用一句话回答：1+1等于几？")
+    print(f"  Chat API 成功，返回: {resp[:80]}...")
 except Exception as e:
     print(f"  Chat API 失败: {e}")
 
-# 测试 Embedding API
 print("\n[2] 测试 Embedding API ...")
 try:
     client = EmbeddingClient()
@@ -35,6 +33,6 @@ except Exception as e:
     print(f"  Embedding API 失败: {e}")
 
 print("\n" + "=" * 50)
-print("如果 Embedding API 失败但 Chat API 成功，说明密钥没错，")
-print("但 Embedding API 没有开通权限或服务未授权。")
+print("如果 Embedding 成功但 Chat 失败，一般说明密钥存在，但该 APPID 没有开通当前 Chat 模型权限。")
+print(f"当前 Chat 配置: wss://{config.XFYUN_CHAT_HOST}{config.XFYUN_CHAT_PATH}, domain={config.XFYUN_CHAT_DOMAIN}")
 print("=" * 50)

@@ -26,7 +26,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useCourseStore } from '../stores/course'
 import { getLearningPath } from '../api/path'
 
@@ -34,12 +34,37 @@ const courseStore = useCourseStore()
 const loading = ref(false)
 const error = ref('')
 const source = ref('demo')
-const remoteNodes = ref([
-  { id: 'digital_logic', title: '数字逻辑基础', desc: '先补齐门电路、触发器和时序逻辑。', status: 'done' },
-  { id: 'instruction', title: '指令系统', desc: '理解指令格式、寻址方式和机器指令执行。', status: 'done' },
-  { id: 'cache_mapping', title: 'Cache 映射方式', desc: '当前重点：直接映射、全相联、组相联。', status: 'active' },
-  { id: 'pipeline', title: '流水线冲突', desc: '下一步学习结构冲突、数据冲突和控制冲突。', status: 'pending' }
-])
+const remoteNodes = ref(getDemoPath(courseStore.currentId))
+
+function getDemoPath(courseId) {
+  const paths = {
+    computer_organization: [
+      { id: 'digital_logic', title: '数字逻辑基础', desc: '先补齐门电路、触发器和时序逻辑。', status: 'done' },
+      { id: 'instruction', title: '指令系统', desc: '理解指令格式、寻址方式和机器指令执行。', status: 'done' },
+      { id: 'cache_mapping', title: 'Cache 映射方式', desc: '当前重点：直接映射、全相联、组相联。', status: 'active' },
+      { id: 'pipeline', title: '流水线冲突', desc: '下一步学习结构冲突、数据冲突和控制冲突。', status: 'pending' }
+    ],
+    data_structure: [
+      { id: 'linear_list', title: '线性表', desc: '理解顺序表和链表的存储差异。', status: 'done' },
+      { id: 'stack_queue', title: '栈与队列', desc: '掌握先进后出和先进先出的典型应用。', status: 'done' },
+      { id: 'binary_tree', title: '二叉树遍历', desc: '当前重点：前序、中序、后序和层序遍历。', status: 'active' },
+      { id: 'graph_shortest_path', title: '图的最短路径', desc: '下一步学习 Dijkstra 和 Floyd 算法。', status: 'pending' }
+    ],
+    operating_system: [
+      { id: 'os_intro', title: '操作系统概述', desc: '理解系统调用和内核职责。', status: 'done' },
+      { id: 'process_schedule', title: '进程调度', desc: '比较 FCFS、SJF 和时间片轮转。', status: 'done' },
+      { id: 'process_sync', title: '进程同步', desc: '当前重点：临界区、信号量和管程。', status: 'active' },
+      { id: 'page_replace', title: '页面置换算法', desc: '下一步学习 FIFO、LRU 和 Clock。', status: 'pending' }
+    ],
+    computer_network: [
+      { id: 'network_model', title: '网络分层模型', desc: '建立 OSI 与 TCP/IP 分层视角。', status: 'done' },
+      { id: 'data_link', title: '数据链路层', desc: '理解帧、差错控制和 MAC。', status: 'done' },
+      { id: 'subnetting', title: '子网划分', desc: '当前重点：掩码、网络号和主机号计算。', status: 'active' },
+      { id: 'tcp_congestion', title: 'TCP 拥塞控制', desc: '下一步学习慢启动、拥塞避免和快恢复。', status: 'pending' }
+    ]
+  }
+  return paths[courseId] || paths.computer_organization
+}
 
 const displayNodes = computed(() => remoteNodes.value)
 
@@ -98,7 +123,22 @@ async function loadPath() {
   }
 }
 
-onMounted(() => { loadPath() })
+function handleCourseChanged(event) {
+  const courseId = event.detail?.courseId || courseStore.currentId
+  source.value = 'demo'
+  error.value = ''
+  remoteNodes.value = getDemoPath(courseId)
+  loadPath()
+}
+
+onMounted(() => {
+  loadPath()
+  window.addEventListener('aptadapt:course-changed', handleCourseChanged)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('aptadapt:course-changed', handleCourseChanged)
+})
 </script>
 
 <style scoped>

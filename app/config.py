@@ -12,6 +12,9 @@ load_dotenv(_ENV_PATH)
 XFYUN_APPID = os.getenv("XFYUN_APPID", "")
 XFYUN_API_KEY = os.getenv("XFYUN_API_KEY", "")
 XFYUN_API_SECRET = os.getenv("XFYUN_API_SECRET", "")
+XFYUN_CHAT_HOST = os.getenv("XFYUN_CHAT_HOST", "spark-api.xf-yun.com")
+XFYUN_CHAT_PATH = os.getenv("XFYUN_CHAT_PATH", "/v4.0/chat")
+XFYUN_CHAT_DOMAIN = os.getenv("XFYUN_CHAT_DOMAIN", "4.0Ultra")
 
 # ── LLM Provider 配置 ──
 # openai_compatible: 使用 OpenAI 兼容接口；xfyun: 使用讯飞星火 WebSocket。
@@ -20,6 +23,11 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", "20"))
+LLM_FAILURE_COOLDOWN_SECONDS = int(os.getenv("LLM_FAILURE_COOLDOWN_SECONDS", "45"))
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.35"))
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1200"))
+SUPERVISOR_USE_LLM = os.getenv("SUPERVISOR_USE_LLM", "0") == "1"
+REVIEWER_USE_LLM = os.getenv("REVIEWER_USE_LLM", "0") == "1"
 
 # ── 讯飞 Embedding API ──
 EMBEDDING_HOST = os.getenv("XFYUN_EMBEDDING_HOST", "emb-cn-huabei-1.xf-yun.com")

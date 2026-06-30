@@ -68,6 +68,7 @@ def _make_initial_state(req: ChatRequest, user_id: int, profile: dict | None, ch
         "total_steps": 0,
         "next_step": "supervisor",
         "error": None,
+        "llm_errors": [],
     }
 
 
@@ -132,6 +133,7 @@ async def send_message(
                 for c in result.get("retrieved_chunks", [])
             ],
             "error": result.get("error"),
+            "llm_errors": result.get("llm_errors", []),
         },
     }
 
@@ -212,6 +214,7 @@ async def send_message_stream(
                 ],
                 "review_passed": final_state.get("review_passed"),
                 "review_notes": final_state.get("review_notes", []),
+                "llm_errors": final_state.get("llm_errors", []),
                 "retrieved_chunks": [
                     c["id"] for c in final_state.get("retrieved_chunks", [])
                 ],

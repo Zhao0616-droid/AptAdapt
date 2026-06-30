@@ -48,7 +48,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useCourseStore } from '../stores/course'
 import { useUserStore } from '../stores/user'
 import { useWorkspaceStore } from '../stores/workspace'
@@ -63,6 +63,64 @@ const input = ref('帮我生成 Cache 直接映射、全相联、组相联的学
 const streamContent = ref('')
 const streaming = ref(false)
 const msgContainer = ref(null)
+const activeCourseId = ref(courseStore.currentId)
+
+function welcomeMessage(courseName = courseStore.currentCourse?.name || '计算机组成原理') {
+  return {
+    role: 'assistant',
+    content: `你好，我是 AptAdapt 学习助手。当前课程是 **${courseName}**，你可以描述薄弱点或直接提问知识点。`
+  }
+}
+
+function storageKey(courseId = courseStore.currentId) {
+  return `aptadapt:chat:${courseId || 'computer_organization'}`
+}
+
+function saveCurrentMessages(courseId = activeCourseId.value) {
+  if (!courseId || !messages.value.length) return
+  localStorage.setItem(storageKey(courseId), JSON.stringify(messages.value))
+}
+
+function loadMessagesForCourse(courseId = courseStore.currentId) {
+  activeCourseId.value = courseId || 'computer_organization'
+  const raw = localStorage.getItem(storageKey(courseId))
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length) {
+        messages.value = parsed
+        scrollToBottom()
+        return
+      }
+    } catch {
+      localStorage.removeItem(storageKey(courseId))
+    }
+  }
+  messages.value = [welcomeMessage(courseStore.currentCourse?.name)]
+  scrollToBottom()
+}
+
+function createFreshConversation(courseId = courseStore.currentId) {
+  activeCourseId.value = courseId || 'computer_organization'
+  input.value = '帮我生成 Cache 直接映射、全相联、组相联的学习资源'
+  streamContent.value = ''
+  streaming.value = false
+  messages.value = [welcomeMessage(courseStore.currentCourse?.name)]
+  localStorage.setItem(storageKey(activeCourseId.value), JSON.stringify(messages.value))
+  scrollToBottom()
+}
+
+function handleCourseChanged(event) {
+  saveCurrentMessages(activeCourseId.value)
+  input.value = ''
+  streamContent.value = ''
+  streaming.value = false
+  loadMessagesForCourse(event.detail?.courseId || courseStore.currentId)
+}
+
+function handleChatReset(event) {
+  createFreshConversation(event.detail?.courseId || courseStore.currentId)
+}
 
 function renderMarkdown(text) {
   return text ? md.render(text) : ''
@@ -100,15 +158,15 @@ function formatResponse(apiData) {
 
   if (resources.length) {
     const names = resources.map(r => '- **' + (r.title || r.type) + '**').join('\n')
-    return '## 已生成以下学习资源\n\n' + names + agentText + '\n\n' + (review.passed ? '审核通过' : '审核未通过')
+    return `## 已生成以下学习资源\n\n${names}${agentText}\n\n${review.passed ? '审核通过' : '审核未通过'}`
   }
 
   if (taskType === 'profile') return '画像已更新。你可以继续描述学习情况，或直接提问知识点。'
-  if (taskType === 'path' || taskType === 'planner') return '学习路径已规划完成，请在右侧面板查看。'
+  if (taskType === 'path' || taskType === 'planner') return '学习路径已规划完成，请在下方个性化路径面板查看。'
   if (apiData.error) {
-    return `本次智能体流程已停止：${apiData.error}\n\n请切换到资源工厂重新生成，或缩短问题范围后再试。`
+    return `本次智能体流程已停止：${apiData.error}\n\n请缩短问题范围后再试。`
   }
-  return '本次智能体流程已完成，但没有生成资源。你可以尝试明确说明要生成“讲解文档、练习题、思维导图或代码案例”。'
+  return '本次智能体流程已完成，但没有生成资源。你可以明确说明要生成“讲解文档、练习题、思维导图或代码案例”。'
 }
 
 function formatRequestError(error) {
@@ -119,7 +177,7 @@ function formatRequestError(error) {
   if (error?.response?.status === 500) {
     return `后端资源生成接口报错：${detail}\n\n这不是前端已经生成了资源，而是后端流程中断了。`
   }
-  return `请求后端失败：${detail}\n\n当前资源区会保留已有内容，不会伪造生成结果。`
+  return `请求后端失败：${detail}\n\n当前不会伪造生成结果。`
 }
 
 async function send() {
@@ -127,6 +185,7 @@ async function send() {
   const userMsg = input.value.trim()
   messages.value.push({ role: 'user', content: userMsg })
   input.value = ''
+  saveCurrentMessages()
   scrollToBottom()
 
   streaming.value = true
@@ -147,15 +206,21 @@ async function send() {
     messages.value.push({ role: 'assistant', content: streamContent.value })
     streaming.value = false
     streamContent.value = ''
+    saveCurrentMessages()
     scrollToBottom()
   }
 }
 
 onMounted(() => {
-  messages.value.push({
-    role: 'assistant',
-    content: '你好，我是 AptAdapt 学习助手。你可以描述自己的专业、薄弱点和学习目标，我会为你生成个性化学习资源。'
-  })
+  createFreshConversation(courseStore.currentId)
+  window.addEventListener('aptadapt:course-changed', handleCourseChanged)
+  window.addEventListener('aptadapt:chat-reset', handleChatReset)
+})
+
+onBeforeUnmount(() => {
+  saveCurrentMessages()
+  window.removeEventListener('aptadapt:course-changed', handleCourseChanged)
+  window.removeEventListener('aptadapt:chat-reset', handleChatReset)
 })
 </script>
 

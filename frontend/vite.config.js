@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     port: 5173,
+    strictPort: true,
     proxy: {
       '/api': {
         target: process.env.BACKEND_URL || 'http://localhost:8000',

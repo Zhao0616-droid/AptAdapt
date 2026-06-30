@@ -2,6 +2,7 @@
 import json
 import re
 import os
+import logging
 from typing import Optional
 
 from ..llm_client import SparkLLM
@@ -9,6 +10,8 @@ from ..schemas import ResourceItem, ReviewResult, StudentProfile
 
 # prompt 模板目录
 PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "agents", "prompts")
+logger = logging.getLogger(__name__)
+LAST_LLM_ERRORS: list[str] = []
 
 
 def _load_prompt(name: str) -> str:
@@ -29,7 +32,9 @@ def _safe_call_llm(prompt: str, fallback: str) -> str:
     try:
         content = _call_llm(prompt)
         return content.strip() or fallback
-    except Exception:
+    except Exception as e:
+        logger.error("LLM call failed: %s", e)
+        LAST_LLM_ERRORS.append(str(e))
         return fallback
 
 
@@ -57,6 +62,86 @@ def _parse_json(raw: str) -> dict:
     except json.JSONDecodeError:
         m = re.search(r"\{.*\}", raw, re.DOTALL)
         return json.loads(m.group()) if m else {}
+
+
+def _normalize_quiz_set(raw_data, knowledge_point: str) -> dict:
+    if isinstance(raw_data, list):
+        raw_questions = raw_data
+        title = f"{knowledge_point} 巩固练习"
+    elif isinstance(raw_data, dict) and isinstance(raw_data.get("questions"), list):
+        raw_questions = raw_data.get("questions") or []
+        title = raw_data.get("title") or f"{knowledge_point} 巩固练习"
+    elif isinstance(raw_data, dict):
+        raw_questions = [raw_data]
+        title = raw_data.get("title") or f"{knowledge_point} 巩固练习"
+    else:
+        raw_questions = []
+        title = f"{knowledge_point} 巩固练习"
+
+    questions = []
+    for index, item in enumerate(raw_questions[:6], start=1):
+        if not isinstance(item, dict):
+            continue
+        question_type = item.get("type") or "choice"
+        if question_type == "short_answer":
+            continue
+        options = item.get("options")
+        if not isinstance(options, list) or not options:
+            options = ["正确", "错误"] if question_type == "true_false" else []
+        questions.append({
+            "id": item.get("id") or f"{knowledge_point}_{index}",
+            "type": question_type,
+            "question": item.get("question") or f"关于{knowledge_point}的第 {index} 题",
+            "options": options,
+            "answer": item.get("answer", 0),
+            "explanation": item.get("explanation") or "请结合讲解文档复盘本题涉及的关键概念。",
+            "difficulty": item.get("difficulty") or "medium",
+            "knowledge_point": item.get("knowledge_point") or knowledge_point,
+        })
+
+    if len(questions) < 3:
+        questions.extend(_fallback_quiz_questions(knowledge_point)[len(questions):])
+
+    return {
+        "title": title,
+        "knowledge_point": knowledge_point,
+        "questions": questions,
+    }
+
+
+def _fallback_quiz_questions(knowledge_point: str) -> list[dict]:
+    return [
+        {
+            "id": f"{knowledge_point}_fallback_1",
+            "type": "choice",
+            "question": f"下列关于{knowledge_point}的说法，正确的是？",
+            "options": ["它只需要死记结论", "它需要结合地址映射/执行过程理解", "它和性能无关", "它不属于计算机组成原理"],
+            "answer": 1,
+            "explanation": f"{knowledge_point}需要结合结构、过程和典型例题理解，不能只背结论。",
+            "difficulty": "easy",
+            "knowledge_point": knowledge_point,
+        },
+        {
+            "id": f"{knowledge_point}_fallback_2",
+            "type": "choice",
+            "question": f"学习{knowledge_point}时，最有效的复盘方式是哪一种？",
+            "options": ["只看答案", "用一个具体例子手算或推演", "跳过错题", "只记英文缩写"],
+            "answer": 1,
+            "explanation": "计算机组成原理的核心知识点通常需要通过具体例子推演，才能暴露薄弱环节。",
+            "difficulty": "medium",
+            "knowledge_point": knowledge_point,
+        },
+        {
+            "id": f"{knowledge_point}_fallback_3",
+            "type": "choice",
+            "question": f"如果你在{knowledge_point}上连续做错题，系统应该优先做什么？",
+            "options": ["降低该知识点掌握度并加入薄弱点", "直接标记为已掌握", "删除学习记录", "跳到无关课程"],
+            "answer": 0,
+            "explanation": "连续做错说明该知识点掌握度不足，应进入薄弱点并触发后续补强资源。",
+            "difficulty": "medium",
+            "knowledge_point": knowledge_point,
+        },
+    ]
 
 
 def _build_context(
@@ -135,22 +220,11 @@ def generate_quiz(knowledge_point: str, profile: Optional[StudentProfile],
     prompt = _render_prompt(template, {k: ctx.get(k, "") for k in ["profile", "knowledge_point", "weak_points"]})
     raw = _safe_call_llm(prompt, "{}")
     quiz_data = _parse_json(raw)
-
-    # 兜底
-    if not quiz_data.get("question"):
-        quiz_data = {
-            "type": "choice",
-            "question": f"下列关于{knowledge_point}的说法，正确的是？",
-            "options": ["A. 选项1", "B. 选项2", "C. 选项3", "D. 选项4"],
-            "answer": 0,
-            "explanation": "请参考知识库了解详情。",
-            "difficulty": "medium",
-            "knowledge_point": knowledge_point,
-        }
+    quiz_data = _normalize_quiz_set(quiz_data, knowledge_point)
 
     return ResourceItem(
         type="quiz",
-        title=f"{knowledge_point} 练习题",
+        title=f"{knowledge_point} 练习集",
         content=json.dumps(quiz_data, ensure_ascii=False),
     )
 
@@ -249,6 +323,8 @@ def review_resources(resources: list[ResourceItem], chunks: list[dict]) -> Revie
         notes.extend(result["issues"])
     if result.get("suggestions"):
         notes.extend(result["suggestions"])
+    for error in LAST_LLM_ERRORS:
+        notes.insert(0, f"大模型调用失败: {error}")
 
     return ReviewResult(passed=passed, notes=notes)
 
@@ -274,6 +350,7 @@ def generate_resources(
         (resources, review)
     """
     resources: list[ResourceItem] = []
+    LAST_LLM_ERRORS.clear()
 
     for rtype in resource_types:
         gen = GENERATORS.get(rtype)

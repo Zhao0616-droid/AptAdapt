@@ -1,6 +1,6 @@
 <template>
   <div class="agent-status-bar">
-    <div v-for="agent in agents" :key="agent.name" class="agent-card">
+    <div v-for="agent in agents" :key="agent.name" :class="['agent-card', { inactive: !agent.active }]">
       <span :class="['dot', agent.status]"></span>
       <div>
         <b>{{ agent.name }}</b>
@@ -70,6 +70,11 @@ defineProps({
   margin: 4px 0 0;
   color: var(--aa-muted);
   font-size: 12px;
+}
+
+.agent-card.inactive {
+  opacity: 0.72;
+  background: rgba(255, 255, 255, 0.42);
 }
 
 .agent-card em {

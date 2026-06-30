@@ -49,10 +49,13 @@ def reviewer_node(state: AgentState) -> AgentState:
         state["review_notes"] = ["未生成任何资源"]
         return advance_agent(state)
 
-    # 先尝试 LLM 审核
-    review = _review_with_llm(resources, retrieved)
+    try:
+        from app.config import REVIEWER_USE_LLM
+    except Exception:
+        REVIEWER_USE_LLM = False
 
-    # 补充规则审核
+    review = _review_with_llm(resources, retrieved) if REVIEWER_USE_LLM else None
+
     rule_review = _rule_based_review(resources, retrieved)
     if review is None:
         review = rule_review
@@ -64,7 +67,10 @@ def reviewer_node(state: AgentState) -> AgentState:
             review["passed"] = False
 
     state["review_passed"] = review.get("passed", False)
-    state["review_notes"] = _format_notes(review)
+    notes = _format_notes(review)
+    for error in state.get("llm_errors", []):
+        notes.insert(0, f"[大模型调用失败] {error}")
+    state["review_notes"] = notes
     return advance_agent(state)
 
 

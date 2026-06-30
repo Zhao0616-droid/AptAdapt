@@ -16,8 +16,8 @@
       <p class="goal">目标：{{ displayProfile.course_goal || '补齐计算机组成原理薄弱点' }}</p>
 
       <div class="tag-group">
-        <span v-for="item in displayProfile.weak_points" :key="item" class="danger">{{ item }}</span>
-        <span v-for="item in displayProfile.learning_preference" :key="item">{{ item }}</span>
+        <span v-for="item in visibleWeakPoints" :key="item" class="danger">{{ item }}</span>
+        <span v-for="item in visibleLearningPreferences" :key="item">{{ item }}</span>
         <span v-if="displayProfile.pace">{{ displayProfile.pace }}</span>
       </div>
     </template>
@@ -36,6 +36,13 @@ const userStore = useUserStore()
 const loading = ref(false)
 
 const displayProfile = computed(() => userStore.profile)
+const visibleWeakPoints = computed(() => dedupeSimilarItems(displayProfile.value?.weak_points || []))
+const visibleLearningPreferences = computed(() =>
+  dedupeSimilarItems([
+    ...(displayProfile.value?.learning_preference || []),
+    ...(displayProfile.value?.resource_preference || [])
+  ])
+)
 const sourceText = computed(() => {
   if (loading.value) return '同步中'
   if (userStore.profileError) return '同步失败'
@@ -58,12 +65,74 @@ async function refreshProfile() {
 onMounted(() => {
   if (!userStore.profile) refreshProfile()
 })
+
+function normalizeTagKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[，,、/|｜;；:：()（）【】\[\]{}<>《》"'“”‘’·.\-_\s]/g, '')
+    .replace(/方式|知识点|核心|相关|学习|掌握|理解|生成/g, '')
+}
+
+function dedupeSimilarItems(items = []) {
+  const result = []
+  const keys = []
+  const tokenSets = []
+  for (const item of items) {
+    const text = String(item || '').trim()
+    const key = normalizeTagKey(text)
+    if (!text || !key) continue
+    const tokens = semanticTokens(key)
+    const duplicateIndex = keys.findIndex((existing, index) =>
+      existing === key ||
+      existing.includes(key) ||
+      key.includes(existing) ||
+      isSimilarTokenSet(tokens, tokenSets[index])
+    )
+    if (duplicateIndex >= 0) {
+      if (text.length < result[duplicateIndex].length) {
+        result[duplicateIndex] = text
+        keys[duplicateIndex] = key
+        tokenSets[duplicateIndex] = tokens
+      }
+      continue
+    }
+    result.push(text)
+    keys.push(key)
+    tokenSets.push(tokens)
+  }
+  return result.slice(0, 10)
+}
+
+function semanticTokens(key) {
+  const tokens = new Set()
+  const concepts = ['cache', '映射', '直接映射', '全相联', '组相联', '流水线', '冲突', '中断', 'dma', '代码', '图解', '资源', '原理']
+  for (const concept of concepts) {
+    if (key.includes(concept)) tokens.add(concept)
+  }
+  if (!tokens.size) {
+    for (const char of key) tokens.add(char)
+  }
+  return tokens
+}
+
+function isSimilarTokenSet(a, b) {
+  if (!a?.size || !b?.size) return false
+  const intersection = [...a].filter(token => b.has(token))
+  if (intersection.length < 2) return false
+  return intersection.length / Math.min(a.size, b.size) >= 0.66
+}
 </script>
 
 <style scoped>
 .profile-card {
+  height: 100%;
+  min-height: 0;
   padding: 18px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .profile-toolbar {

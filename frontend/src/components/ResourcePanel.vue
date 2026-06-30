@@ -8,7 +8,7 @@
       <div class="panel-actions">
         <span>{{ statusText }}</span>
         <el-button type="primary" size="small" @click="loadGeneratedResources" :loading="loading" :disabled="loading">
-          调用后端生成
+          生成核心资源
         </el-button>
       </div>
     </div>
@@ -31,7 +31,7 @@
     <div class="resource-detail">
       <div v-if="!activeResource" class="resource-empty">
         <b>等待生成资源</b>
-        <p>点击“调用后端生成”后，会展示文档、导图、练习题、代码示例和视频脚本。</p>
+        <p>点击“生成核心资源”后，会优先生成讲解文档和练习题，减少后端等待时间。</p>
       </div>
       <MarkdownViewer
         v-else-if="activeResource.type === 'doc' || activeResource.type === 'video_script'"
@@ -59,35 +59,13 @@ const workspaceStore = useWorkspaceStore()
 const activeIndex = ref(0)
 const loading = ref(false)
 const error = ref('')
-const demoResources = [
-  {
-    type: 'doc',
-    title: 'Cache 映射方式讲解',
-    summary: '演示资源：对直接映射、全相联和组相联进行对比。',
-    content: '## Cache 映射方式\n\n直接映射速度快但冲突多；全相联冲突少但硬件复杂；组相联在两者之间折中。'
-  },
-  {
-    type: 'quiz',
-    title: 'Cache 映射练习',
-    summary: '演示资源：完成后可提交到后端更新画像。',
-    content: {
-      question: '主存块只能映射到 Cache 中唯一一个位置的是哪种方式？',
-      options: ['直接映射', '全相联映射', '组相联映射', '随机映射'],
-      answer: 0,
-      explanation: '直接映射中，主存块号通过取模确定唯一 Cache 行。'
-    }
-  }
-]
-const localResources = ref([...demoResources])
-const localSource = ref('demo')
 
-const resources = computed(() => workspaceStore.resources.length ? workspaceStore.resources : localResources.value)
-const source = computed(() => workspaceStore.resources.length ? workspaceStore.source : localSource.value)
+const resources = computed(() => workspaceStore.resources)
 const activeResource = computed(() => resources.value[activeIndex.value])
 const statusText = computed(() => {
   if (loading.value) return '生成中'
-  if (error.value) return '演示资源'
-  return source.value === 'remote' ? `${resources.value.length} 类后端资源` : `${resources.value.length} 类演示资源`
+  if (error.value) return '生成失败'
+  return resources.value.length ? `${resources.value.length} 类后端资源` : '等待生成'
 })
 
 function iconLabel(type) {
@@ -105,12 +83,36 @@ function parseContent(item) {
   }
 }
 
+function normalizeQuizContent(content, title) {
+  const parsed = typeof content === 'string' ? parseContent({ type: 'quiz', content }) : content
+  if (parsed?.questions && Array.isArray(parsed.questions)) {
+    return {
+      title: parsed.title || title || '巩固练习',
+      knowledge_point: parsed.knowledge_point || 'Cache 映射方式',
+      questions: parsed.questions
+    }
+  }
+  if (Array.isArray(parsed)) {
+    return {
+      title: title || '巩固练习',
+      knowledge_point: parsed[0]?.knowledge_point || 'Cache 映射方式',
+      questions: parsed
+    }
+  }
+  return {
+    title: title || parsed?.title || '巩固练习',
+    knowledge_point: parsed?.knowledge_point || 'Cache 映射方式',
+    questions: parsed?.question ? [parsed] : []
+  }
+}
+
 function normalizeResource(item) {
+  const content = parseContent(item)
   return {
     type: item.type,
     title: item.title || iconLabel(item.type),
     summary: item.summary || '由后端资源智能体生成',
-    content: parseContent(item)
+    content: item.type === 'quiz' ? normalizeQuizContent(content, item.title) : content
   }
 }
 
@@ -120,20 +122,20 @@ async function loadGeneratedResources() {
   error.value = ''
   try {
     const res = await generateResource(
-      courseStore.currentCourse?.name || '计算机组成原理',
-      ['doc', 'mindmap', 'quiz', 'code', 'video_script']
+      'Cache 映射方式',
+      ['doc', 'quiz']
     )
     const remoteResources = res.data?.resources || []
     if (remoteResources.length) {
       const normalized = remoteResources.map(normalizeResource)
-      localResources.value = normalized
       workspaceStore.setResources(normalized, 'remote')
-      activeIndex.value = 0
-      localSource.value = 'remote'
+      activeIndex.value = normalized.findIndex(item => item.type === 'quiz')
+      if (activeIndex.value < 0) activeIndex.value = 0
+    } else {
+      workspaceStore.setResources([], 'remote')
     }
   } catch (e) {
     error.value = e.message || 'generate resource failed'
-    localSource.value = 'demo'
   } finally {
     loading.value = false
   }

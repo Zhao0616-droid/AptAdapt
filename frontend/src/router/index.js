@@ -1,19 +1,21 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import LoginView from '../views/LoginView.vue'
+import MainLayout from '../views/MainLayout.vue'
 
 const routes = [
   {
     path: '/',
-    redirect: '/login'
+    redirect: '/workspace'
   },
   {
     path: '/login',
     name: 'Login',
-    component: () => import('../views/LoginView.vue')
+    component: LoginView
   },
   {
     path: '/workspace',
     name: 'Workspace',
-    component: () => import('../views/MainLayout.vue'),
+    component: MainLayout,
     meta: { requiresAuth: true }
   }
 ]
@@ -24,14 +26,18 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token')
-  if (to.meta.requiresAuth && !token) {
-    next('/login')
-  } else if (to.path === '/login' && token) {
-    next('/workspace')
-  } else {
-    next()
+  if (to.meta.requiresAuth && !localStorage.getItem('token')) {
+    localStorage.setItem('token', 'demo-token')
+    localStorage.setItem('demoMode', '1')
   }
+  next()
+})
+
+router.onError((error) => {
+  console.error('[AptAdapt router error]', error)
+  localStorage.removeItem('token')
+  localStorage.removeItem('demoMode')
+  window.location.href = '/login'
 })
 
 export default router

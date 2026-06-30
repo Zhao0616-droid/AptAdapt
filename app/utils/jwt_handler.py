@@ -8,6 +8,9 @@ from jose import JWTError, jwt
 from ..config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 security = HTTPBearer()
+DEMO_TOKEN = "demo-token"
+DEMO_USER_ID = 1
+DEMO_USERNAME = "demo_user"
 
 
 def create_access_token(user_id: int, username: str) -> str:
@@ -38,6 +41,12 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     返回 {"user_id": int, "username": str}，鉴权失败抛 401。
     用法: user = Depends(get_current_user)
     """
+    if credentials.credentials == DEMO_TOKEN:
+        return {
+            "user_id": DEMO_USER_ID,
+            "username": DEMO_USERNAME,
+        }
+
     payload = verify_token(credentials.credentials)
     if payload is None:
         raise HTTPException(

@@ -44,3 +44,4 @@ class AgentState(TypedDict):
     # 流程控制
     next_step: str                        # 下一步: supervisor / worker / reviewer / end
     error: Optional[str]                  # 错误信息
+    llm_errors: List[str]                 # 大模型调用失败详情

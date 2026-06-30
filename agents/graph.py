@@ -136,7 +136,7 @@ def run_agent_flow(user_id: str, message: str, chapter: str | None = None,
         "code_data": None, "video_script": None,
         "review_passed": None, "review_notes": [], "learning_path": [], "completed_nodes": [],
         "execution_log": [], "step_index": 0, "total_steps": 0,
-        "next_step": "supervisor", "error": None,
+        "next_step": "supervisor", "error": None, "llm_errors": [],
     }
     logger.info("Agent 流程启动: user=%s msg=%s", user_id, message[:50])
     result = agent_graph.invoke(initial_state)
@@ -158,7 +158,7 @@ def run_agent_flow_stream(user_id: str, message: str, chapter: str | None = None
         "code_data": None, "video_script": None,
         "review_passed": None, "review_notes": [], "learning_path": [], "completed_nodes": [],
         "execution_log": [], "step_index": 0, "total_steps": 0,
-        "next_step": "supervisor", "error": None,
+        "next_step": "supervisor", "error": None, "llm_errors": [],
     }
 
     for step_output in agent_graph.stream(initial_state):
