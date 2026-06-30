@@ -4,11 +4,12 @@
       <div>
         <p class="aa-kicker">Resource Factory</p>
         <h2 class="aa-title">生成资源</h2>
+        <p class="topic-line">当前主题：{{ generationTopic }}</p>
       </div>
       <div class="panel-actions">
         <span>{{ statusText }}</span>
         <el-button type="primary" size="small" @click="loadGeneratedResources" :loading="loading" :disabled="loading">
-          生成核心资源
+          生成关联资源
         </el-button>
       </div>
     </div>
@@ -16,7 +17,7 @@
     <div class="resource-list">
       <article
         v-for="(res, index) in resources"
-        :key="res.type"
+        :key="res.id || `${res.type}-${index}`"
         :class="['resource-card', { active: activeIndex === index }]"
         @click="activeIndex = index"
       >
@@ -31,7 +32,7 @@
     <div class="resource-detail">
       <div v-if="!activeResource" class="resource-empty">
         <b>等待生成资源</b>
-        <p>点击“生成核心资源”后，会优先生成讲解文档和练习题，减少后端等待时间。</p>
+        <p>先在对话框提出学习问题，再点击“生成关联资源”，系统会围绕最近问题生成并保留资源。</p>
       </div>
       <MarkdownViewer
         v-else-if="activeResource.type === 'doc' || activeResource.type === 'video_script'"
@@ -63,10 +64,15 @@ const error = ref('')
 
 const resources = computed(() => workspaceStore.resources)
 const activeResource = computed(() => resources.value[activeIndex.value])
+const generationTopic = computed(() => {
+  const recentQuestion = String(workspaceStore.lastMessage || '').trim()
+  if (recentQuestion) return recentQuestion
+  return courseStore.currentCourse?.name || '计算机组成原理核心知识点'
+})
 const statusText = computed(() => {
   if (loading.value) return '生成中'
   if (error.value) return '生成失败'
-  return resources.value.length ? `${resources.value.length} 类后端资源` : '等待生成'
+  return resources.value.length ? `${resources.value.length} 个已保留资源` : '等待生成'
 })
 
 function iconLabel(type) {
@@ -78,8 +84,9 @@ function normalizeResource(item) {
   return {
     type: item.type,
     title: item.title || iconLabel(item.type),
-    summary: item.summary || '由后端资源智能体生成',
-    content: normalizeResourceContent(item)
+    summary: item.summary || `围绕“${generationTopic.value}”生成`,
+    content: normalizeResourceContent(item),
+    createdAt: new Date().toISOString()
   }
 }
 
@@ -89,17 +96,16 @@ async function loadGeneratedResources() {
   error.value = ''
   try {
     const res = await generateResource(
-      'Cache 映射方式',
-      ['doc', 'quiz']
+      generationTopic.value,
+      ['doc', 'quiz', 'code'],
+      courseStore.currentId
     )
     const remoteResources = res.data?.resources || []
     if (remoteResources.length) {
+      const previousCount = resources.value.length
       const normalized = remoteResources.map(normalizeResource)
-      workspaceStore.setResources(normalized, 'remote')
-      activeIndex.value = normalized.findIndex(item => item.type === 'quiz')
-      if (activeIndex.value < 0) activeIndex.value = 0
-    } else {
-      workspaceStore.setResources([], 'remote')
+      workspaceStore.appendResources(normalized, 'remote')
+      activeIndex.value = previousCount
     }
   } catch (e) {
     error.value = e.message || 'generate resource failed'
@@ -125,6 +131,14 @@ async function loadGeneratedResources() {
 .panel-head span {
   color: var(--aa-muted);
   font-size: 14px;
+}
+
+.topic-line {
+  max-width: 760px;
+  margin: 8px 0 0;
+  color: var(--aa-muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .panel-actions {

@@ -64,17 +64,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   function applyChatResult(data = {}, message = '') {
-    resources.value = Array.isArray(data.resources) ? data.resources.map(normalizeResource) : []
+    const nextResources = Array.isArray(data.resources) ? data.resources : []
+    if (nextResources.length) appendResources(nextResources, 'remote')
     agentSequence.value = Array.isArray(data.agent_sequence) ? data.agent_sequence : []
     executionLog.value = Array.isArray(data.execution_log) ? data.execution_log : []
     review.value = data.review || null
     lastTaskType.value = data.task_type || ''
-    lastMessage.value = message
+    lastMessage.value = message || lastMessage.value
     source.value = resources.value.length || executionLog.value.length ? 'remote' : 'demo'
   }
 
   function setResources(items = [], nextSource = 'remote') {
-    resources.value = items.map(normalizeResource)
+    appendResources(items, nextSource)
+  }
+
+  function appendResources(items = [], nextSource = 'remote') {
+    resources.value = mergeResourceHistory(resources.value, items.map(normalizeResource))
     source.value = nextSource
   }
 
@@ -113,6 +118,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     setAgentRunning,
     applyChatResult,
     setResources,
+    appendResources,
     resetForCourse,
     markAgentFailed
   }
@@ -120,9 +126,41 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
 function normalizeResource(item) {
   return {
+    id: item.id || makeResourceKey(item),
     type: item.type,
     title: item.title || item.type || '学习资源',
     summary: item.summary || '由多智能体协同生成',
-    content: normalizeResourceContent(item)
+    content: normalizeResourceContent(item),
+    createdAt: item.createdAt || new Date().toISOString()
   }
+}
+
+function mergeResourceHistory(current = [], incoming = []) {
+  const map = new Map()
+  for (const item of current) {
+    map.set(makeResourceKey(item), item)
+  }
+  for (const item of incoming) {
+    const key = makeResourceKey(item)
+    map.set(key, {
+      ...item,
+      id: item.id || key
+    })
+  }
+  return [...map.values()]
+}
+
+function makeResourceKey(item = {}) {
+  const title = String(item.title || '').trim()
+  const type = String(item.type || 'resource').trim()
+  const content = typeof item.content === 'string'
+    ? item.content
+    : JSON.stringify(item.content || {})
+  let hash = 0
+  const raw = `${type}|${title}|${content.slice(0, 240)}`
+  for (let i = 0; i < raw.length; i += 1) {
+    hash = ((hash << 5) - hash) + raw.charCodeAt(i)
+    hash |= 0
+  }
+  return `${type}-${Math.abs(hash)}`
 }

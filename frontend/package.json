@@ -18,7 +18,8 @@
     "check:demo-token": "node scripts/check-demo-token-contract.mjs",
     "check:profile-layout": "node scripts/check-profile-layout-agent-stats.mjs",
     "check:p1": "node scripts/check-p1-learning-semantics.mjs",
-    "check:code-resource": "node scripts/check-code-resource-rendering.mjs"
+    "check:code-resource": "node scripts/check-code-resource-rendering.mjs",
+    "check:resource-retention": "node scripts/check-resource-retention-behavior.mjs"
   },
   "dependencies": {
     "vue": "^3.4.0",

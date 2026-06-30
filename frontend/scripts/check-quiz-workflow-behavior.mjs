@@ -25,7 +25,8 @@ assert(quizCard.includes('submitQuiz(payload)'), 'QuizCard should submit the who
 
 assert(resourcePanel.includes('normalizeResourceContent'), 'ResourcePanel should normalize resources before rendering.')
 assert(normalizers.includes('normalizeQuizContent'), 'Shared resource normalizer should normalize quiz resources before rendering.')
-assert(resourcePanel.includes('activeIndex.value = normalized.findIndex'), 'Resource factory should open the exercise card after generation.')
+assert(resourcePanel.includes('workspaceStore.appendResources'), 'Resource factory should preserve existing resources when adding new quiz resources.')
+assert(resourcePanel.includes('activeIndex.value = previousCount'), 'Resource factory should open the first newly appended resource after generation.')
 
 assert(quizPrompt.includes('"questions"'), 'Quiz prompt should ask the LLM for a question set.')
 assert(quizPrompt.includes('至少 3 道'), 'Quiz prompt should require multiple usable questions.')
