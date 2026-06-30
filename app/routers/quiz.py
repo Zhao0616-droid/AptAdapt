@@ -58,8 +58,10 @@ def _update_mastery(profile: StudentProfile, answers: List[QuizAnswer]) -> Stude
     for kp, results in grouped.items():
         accuracy = sum(results) / len(results)
         # 与历史掌握度做滑动平均（权重 0.6 历史 + 0.4 本次）
-        old = profile.mastery.get(kp, 0.0)
-        if isinstance(old, (int, float)):
+        old = profile.mastery.get(kp)
+        if old is None:
+            new_mastery = round(accuracy, 2)
+        elif isinstance(old, (int, float)):
             new_mastery = round(old * 0.6 + accuracy * 0.4, 2)
         else:
             new_mastery = round(accuracy, 2)

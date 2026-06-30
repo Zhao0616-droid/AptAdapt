@@ -23,7 +23,7 @@
         <b>{{ metrics.strongCount }} 项</b>
       </div>
       <div>
-        <span>薄弱点数量</span>
+        <span>待巩固数量</span>
         <b>{{ metrics.weakCount }} 项</b>
       </div>
     </div>
@@ -116,7 +116,9 @@ const metrics = computed(() => {
   }
 })
 
-const suggestion = computed(() => evaluation.value?.suggestion || '暂无评估数据，完成练习后系统将自动生成评估。')
+const suggestion = computed(() =>
+  evaluation.value?.suggestion || '暂无评估数据，完成练习后系统将自动生成评估。'
+)
 
 const statusText = computed(() => {
   if (loading.value) return '加载中'
@@ -132,8 +134,13 @@ function chartData() {
   const list = displayEvaluation.value?.mastery_list || []
   return list.slice(0, 6).map(item => ({
     name: item.knowledge_point || '知识点',
-    value: Math.round((Number(item.mastery) || 0) * 100)
+    value: Math.round((Number(item.mastery) || 0) * 100),
+    status: item.status || 'weak'
   }))
+}
+
+function formatMasteryLabel(params) {
+  return params.data?.status === 'untested' ? '未测评' : `${params.value}%`
 }
 
 function renderChart() {
@@ -146,7 +153,11 @@ function renderChart() {
     color: ['#19bfea', '#27c994'],
     tooltip: {
       trigger: 'axis',
-      valueFormatter: value => `${value}%`
+      formatter: params => {
+        const item = Array.isArray(params) ? params[0] : params
+        if (!item) return ''
+        return `${item.name}：${formatMasteryLabel(item)}`
+      }
     },
     grid: {
       left: 18,
@@ -176,16 +187,20 @@ function renderChart() {
     series: [{
       name: '掌握度',
       type: 'bar',
-      data: data.map(item => item.value),
+      data: data.map(item => ({ value: item.value, status: item.status })),
       barWidth: 18,
       itemStyle: {
         borderRadius: [0, 8, 8, 0],
-        color: params => params.value < 50 ? '#ff7cac' : params.value >= 80 ? '#27c994' : '#19bfea'
+        color: params => {
+          if (params.data?.status === 'untested') return '#b8c7d4'
+          if (params.value < 50) return '#ff7cac'
+          return params.value >= 80 ? '#27c994' : '#19bfea'
+        }
       },
       label: {
         show: true,
         position: 'right',
-        formatter: '{c}%',
+        formatter: formatMasteryLabel,
         color: '#31516c',
         fontWeight: 700
       }

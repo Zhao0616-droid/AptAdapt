@@ -9,10 +9,10 @@
 
     <template v-if="displayProfile">
       <div class="avatar-ring">
-        <div class="avatar-core">{{ displayProfile.major?.charAt(0) || '学' }}</div>
+        <div class="avatar-core">{{ avatarText }}</div>
       </div>
 
-      <h3>{{ displayProfile.major || '计算机类' }} · {{ displayProfile.grade || '学习者' }}</h3>
+      <h3>{{ profileTitle }}</h3>
       <p class="goal">目标：{{ displayProfile.course_goal || '补齐计算机组成原理薄弱点' }}</p>
 
       <div class="tag-group">
@@ -49,6 +49,21 @@ const sourceText = computed(() => {
   if (userStore.profileSource === 'remote') return '后端画像'
   return '待建立'
 })
+const profileTitle = computed(() => {
+  const major = normalizeProfileValue(displayProfile.value?.major) || '计算机类'
+  const grade = normalizeProfileValue(displayProfile.value?.grade)
+  return grade ? `${major} · ${grade}` : major
+})
+const avatarText = computed(() => normalizeProfileValue(displayProfile.value?.major)?.charAt(0) || '学')
+
+function isUnknownValue(value) {
+  const text = String(value || '').trim().toLowerCase()
+  return !text || ['未知', 'unknown', 'null', 'none', '未填写', '待补充'].includes(text)
+}
+
+function normalizeProfileValue(value) {
+  return isUnknownValue(value) ? '' : String(value).trim()
+}
 
 async function refreshProfile() {
   if (loading.value) return
@@ -70,7 +85,7 @@ function normalizeTagKey(value) {
   return String(value || '')
     .toLowerCase()
     .replace(/\s+/g, '')
-    .replace(/[，,、/|｜;；:：()（）【】\[\]{}<>《》"'“”‘’·.\-_\s]/g, '')
+    .replace(/[，。|、:：；;（）()[\]{}<>《》"'“”‘’\-_\s]/g, '')
     .replace(/方式|知识点|核心|相关|学习|掌握|理解|生成/g, '')
 }
 
