@@ -8,6 +8,7 @@ const repoRoot = path.resolve(frontendRoot, '..')
 
 const quizCard = await readFile(path.join(frontendRoot, 'src', 'components', 'QuizCard.vue'), 'utf8')
 const resourcePanel = await readFile(path.join(frontendRoot, 'src', 'components', 'ResourcePanel.vue'), 'utf8')
+const normalizers = await readFile(path.join(frontendRoot, 'src', 'utils', 'resourceNormalizers.js'), 'utf8')
 const quizPrompt = await readFile(path.join(repoRoot, 'agents', 'prompts', 'quiz_prompt.txt'), 'utf8')
 const resourceGenerator = await readFile(path.join(repoRoot, 'app', 'services', 'resource_generator.py'), 'utf8')
 
@@ -22,7 +23,8 @@ assert(quizCard.includes('answers.value'), 'QuizCard should track answers for ev
 assert(quizCard.includes('aptadapt:evaluation-refresh'), 'Quiz submission should refresh the learning evaluation panel.')
 assert(quizCard.includes('submitQuiz(payload)'), 'QuizCard should submit the whole exercise set to the backend.')
 
-assert(resourcePanel.includes('normalizeQuizContent'), 'ResourcePanel should normalize quiz resources before rendering.')
+assert(resourcePanel.includes('normalizeResourceContent'), 'ResourcePanel should normalize resources before rendering.')
+assert(normalizers.includes('normalizeQuizContent'), 'Shared resource normalizer should normalize quiz resources before rendering.')
 assert(resourcePanel.includes('activeIndex.value = normalized.findIndex'), 'Resource factory should open the exercise card after generation.')
 
 assert(quizPrompt.includes('"questions"'), 'Quiz prompt should ask the LLM for a question set.')

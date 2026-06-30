@@ -49,6 +49,7 @@ import { computed, ref } from 'vue'
 import { useCourseStore } from '../stores/course'
 import { useWorkspaceStore } from '../stores/workspace'
 import { generateResource } from '../api/resource'
+import { normalizeResourceContent } from '../utils/resourceNormalizers'
 import MarkdownViewer from './MarkdownViewer.vue'
 import MindMapViewer from './MindMapViewer.vue'
 import QuizCard from './QuizCard.vue'
@@ -73,46 +74,12 @@ function iconLabel(type) {
   return map[type] || 'AI'
 }
 
-function parseContent(item) {
-  if (item.type !== 'quiz' && item.type !== 'code') return item.content
-  if (typeof item.content !== 'string') return item.content
-  try {
-    return JSON.parse(item.content)
-  } catch {
-    return item.content
-  }
-}
-
-function normalizeQuizContent(content, title) {
-  const parsed = typeof content === 'string' ? parseContent({ type: 'quiz', content }) : content
-  if (parsed?.questions && Array.isArray(parsed.questions)) {
-    return {
-      title: parsed.title || title || '巩固练习',
-      knowledge_point: parsed.knowledge_point || 'Cache 映射方式',
-      questions: parsed.questions
-    }
-  }
-  if (Array.isArray(parsed)) {
-    return {
-      title: title || '巩固练习',
-      knowledge_point: parsed[0]?.knowledge_point || 'Cache 映射方式',
-      questions: parsed
-    }
-  }
-  return {
-    title: title || parsed?.title || '巩固练习',
-    knowledge_point: parsed?.knowledge_point || 'Cache 映射方式',
-    questions: parsed?.question ? [parsed] : []
-  }
-}
-
 function normalizeResource(item) {
-  const content = parseContent(item)
   return {
     type: item.type,
     title: item.title || iconLabel(item.type),
     summary: item.summary || '由后端资源智能体生成',
-    content: item.type === 'quiz' ? normalizeQuizContent(content, item.title) : content
+    content: normalizeResourceContent(item)
   }
 }
 

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { normalizeResourceContent } from '../utils/resourceNormalizers'
 
 const agentLabels = {
   supervisor: '识别意图并编排任务',
@@ -122,16 +123,6 @@ function normalizeResource(item) {
     type: item.type,
     title: item.title || item.type || '学习资源',
     summary: item.summary || '由多智能体协同生成',
-    content: parseContent(item)
-  }
-}
-
-function parseContent(item) {
-  if (item.type !== 'quiz' && item.type !== 'code') return item.content
-  if (typeof item.content !== 'string') return item.content
-  try {
-    return JSON.parse(item.content)
-  } catch {
-    return item.content
+    content: normalizeResourceContent(item)
   }
 }
