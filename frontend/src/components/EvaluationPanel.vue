@@ -11,7 +11,11 @@
       </div>
     </div>
 
-    <div ref="radarEl" class="chart"></div>
+    <div v-if="hasEvaluationData" ref="radarEl" class="chart"></div>
+    <div v-else class="evaluation-empty">
+      <b>暂无学习评估</b>
+      <p>当前账号还没有练习提交或掌握度记录。完成资源工厂中的练习题后，这里会生成真实评估。</p>
+    </div>
 
     <div class="metric-list">
       <div>
@@ -42,10 +46,21 @@ const radarEl = ref(null)
 const courseStore = useCourseStore()
 const loading = ref(false)
 const error = ref('')
-const source = ref('demo')
-const evaluation = ref(getDemoEvaluation(courseStore.currentId))
+const source = ref('empty')
+const evaluation = ref(emptyEvaluation())
 let radar = null
 let resizeObserver = null
+
+function emptyEvaluation() {
+  return {
+    overall_mastery: 0,
+    weak_points: [],
+    strong_points: [],
+    mastery_list: [],
+    progress: [],
+    suggestion: '暂无评估数据。完成练习题后，系统会根据正确率生成掌握度和学习建议。'
+  }
+}
 
 function getDemoEvaluation(courseId) {
   const evaluations = {
@@ -61,51 +76,13 @@ function getDemoEvaluation(courseId) {
         { knowledge_point: '流水线冲突', mastery: 0.38, status: 'weak' }
       ],
       suggestion: '演示数据：建议先巩固 Cache 映射方式，再补充流水线冲突练习。'
-    },
-    data_structure: {
-      overall_mastery: 0.61,
-      weak_points: ['二叉树遍历', '图的最短路径', '快速排序'],
-      strong_points: ['线性表', '栈与队列'],
-      mastery_list: [
-        { knowledge_point: '线性表', mastery: 0.82, status: 'strong' },
-        { knowledge_point: '栈与队列', mastery: 0.74, status: 'normal' },
-        { knowledge_point: '二叉树遍历', mastery: 0.36, status: 'weak' },
-        { knowledge_point: '图的最短路径', mastery: 0.31, status: 'weak' },
-        { knowledge_point: '快速排序', mastery: 0.48, status: 'weak' }
-      ],
-      suggestion: '演示数据：建议先用手算例题攻克二叉树遍历，再进入图算法。'
-    },
-    operating_system: {
-      overall_mastery: 0.63,
-      weak_points: ['进程同步', '页面置换算法', '死锁检测'],
-      strong_points: ['操作系统概述'],
-      mastery_list: [
-        { knowledge_point: '操作系统概述', mastery: 0.88, status: 'strong' },
-        { knowledge_point: '进程调度', mastery: 0.66, status: 'normal' },
-        { knowledge_point: '进程同步', mastery: 0.4, status: 'weak' },
-        { knowledge_point: '页面置换算法', mastery: 0.44, status: 'weak' },
-        { knowledge_point: '死锁检测', mastery: 0.35, status: 'weak' }
-      ],
-      suggestion: '演示数据：建议用流程图推演进程同步，再练习页面置换表格题。'
-    },
-    computer_network: {
-      overall_mastery: 0.6,
-      weak_points: ['子网划分', 'TCP 拥塞控制', '路由选择算法'],
-      strong_points: ['网络概述'],
-      mastery_list: [
-        { knowledge_point: '网络概述', mastery: 0.8, status: 'normal' },
-        { knowledge_point: '数据链路层', mastery: 0.62, status: 'normal' },
-        { knowledge_point: '子网划分', mastery: 0.34, status: 'weak' },
-        { knowledge_point: 'TCP 拥塞控制', mastery: 0.37, status: 'weak' },
-        { knowledge_point: '路由选择算法', mastery: 0.46, status: 'weak' }
-      ],
-      suggestion: '演示数据：建议先练子网掩码计算，再结合抓包理解 TCP 拥塞控制。'
     }
   }
   return evaluations[courseId] || evaluations.computer_organization
 }
 
 const displayEvaluation = computed(() => evaluation.value)
+const hasEvaluationData = computed(() => (displayEvaluation.value?.mastery_list || []).length > 0)
 
 const metrics = computed(() => {
   const ev = evaluation.value
@@ -117,17 +94,30 @@ const metrics = computed(() => {
 })
 
 const suggestion = computed(() =>
-  evaluation.value?.suggestion || '暂无评估数据，完成练习后系统将自动生成评估。'
+  evaluation.value?.suggestion || emptyEvaluation().suggestion
 )
 
 const statusText = computed(() => {
   if (loading.value) return '加载中'
-  if (error.value) return '演示数据'
-  return source.value === 'remote' ? '后端数据' : '演示数据'
+  if (error.value) return '同步失败'
+  if (source.value === 'remote') return '后端数据'
+  if (source.value === 'demo') return '演示数据'
+  return '暂无数据'
 })
 
 function percent(value) {
   return `${Math.round((Number(value) || 0) * 100)}%`
+}
+
+function normalizeRemoteEvaluation(data) {
+  return {
+    ...emptyEvaluation(),
+    ...(data || {}),
+    mastery_list: Array.isArray(data?.mastery_list) ? data.mastery_list : [],
+    weak_points: Array.isArray(data?.weak_points) ? data.weak_points : [],
+    strong_points: Array.isArray(data?.strong_points) ? data.strong_points : [],
+    progress: Array.isArray(data?.progress) ? data.progress : []
+  }
 }
 
 function chartData() {
@@ -144,11 +134,14 @@ function formatMasteryLabel(params) {
 }
 
 function renderChart() {
+  if (!hasEvaluationData.value) {
+    radar?.clear()
+    return
+  }
   if (!radarEl.value) return
   if (!radar) radar = echarts.init(radarEl.value)
 
   const data = chartData()
-  if (!data.length) return
   radar.setOption({
     color: ['#19bfea', '#27c994'],
     tooltip: {
@@ -214,20 +207,12 @@ async function loadEvaluation() {
   error.value = ''
   try {
     const res = await getEvaluation()
-    if (res.data?.mastery_list?.length) {
-      evaluation.value = res.data
-      source.value = 'remote'
-    } else if (res.data) {
-      evaluation.value = {
-        ...evaluation.value,
-        ...res.data,
-        suggestion: res.data.suggestion || evaluation.value.suggestion
-      }
-      source.value = 'remote'
-    }
+    evaluation.value = normalizeRemoteEvaluation(res.data)
+    source.value = 'remote'
   } catch (e) {
     error.value = e.message || 'load evaluation failed'
-    source.value = 'demo'
+    evaluation.value = emptyEvaluation()
+    source.value = 'empty'
   } finally {
     loading.value = false
     await nextTick()
@@ -237,8 +222,10 @@ async function loadEvaluation() {
 
 async function handleCourseChanged(event) {
   const courseId = event.detail?.courseId || courseStore.currentId
-  evaluation.value = getDemoEvaluation(courseId)
-  source.value = 'demo'
+  evaluation.value = localStorage.getItem('demoMode') === '1'
+    ? getDemoEvaluation(courseId)
+    : emptyEvaluation()
+  source.value = localStorage.getItem('demoMode') === '1' ? 'demo' : 'empty'
   error.value = ''
   await nextTick()
   renderChart()
@@ -293,10 +280,33 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
-.chart {
+.chart,
+.evaluation-empty {
   width: 100%;
   height: clamp(420px, 48vh, 620px);
   min-height: 420px;
+}
+
+.evaluation-empty {
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  text-align: center;
+  color: var(--aa-muted);
+  border-radius: 8px;
+  border: 1px dashed rgba(89, 128, 176, 0.2);
+  background: rgba(250, 253, 255, 0.58);
+}
+
+.evaluation-empty b {
+  color: var(--aa-text);
+  font-size: 18px;
+}
+
+.evaluation-empty p {
+  max-width: 420px;
+  margin: 0;
+  line-height: 1.7;
 }
 
 .metric-list {
@@ -345,7 +355,8 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  .chart {
+  .chart,
+  .evaluation-empty {
     height: 380px;
     min-height: 380px;
   }
