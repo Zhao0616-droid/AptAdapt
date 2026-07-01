@@ -20,7 +20,8 @@
     "check:p1": "node scripts/check-p1-learning-semantics.mjs",
     "check:code-resource": "node scripts/check-code-resource-rendering.mjs",
     "check:resource-retention": "node scripts/check-resource-retention-behavior.mjs",
-    "check:empty-evaluation": "node scripts/check-empty-evaluation-behavior.mjs"
+    "check:empty-evaluation": "node scripts/check-empty-evaluation-behavior.mjs",
+    "check:evaluation-chart": "node scripts/check-evaluation-chart-visibility.mjs"
   },
   "dependencies": {
     "vue": "^3.4.0",

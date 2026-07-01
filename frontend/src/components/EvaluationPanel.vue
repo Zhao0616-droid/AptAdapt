@@ -50,6 +50,7 @@ const source = ref('empty')
 const evaluation = ref(emptyEvaluation())
 let radar = null
 let resizeObserver = null
+let chartFrame = 0
 
 function emptyEvaluation() {
   return {
@@ -133,13 +134,26 @@ function formatMasteryLabel(params) {
   return params.data?.status === 'untested' ? '未测评' : `${params.value}%`
 }
 
+function scheduleRenderChart() {
+  if (chartFrame) window.cancelAnimationFrame(chartFrame)
+  nextTick(() => {
+    chartFrame = window.requestAnimationFrame(() => {
+      chartFrame = 0
+      renderChart()
+    })
+  })
+}
+
 function renderChart() {
   if (!hasEvaluationData.value) {
     radar?.clear()
     return
   }
   if (!radarEl.value) return
+  const { width, height } = radarEl.value.getBoundingClientRect()
+  if (width < 160 || height < 160) return
   if (!radar) radar = echarts.init(radarEl.value)
+  radar.resize()
 
   const data = chartData()
   radar.setOption({
@@ -215,8 +229,7 @@ async function loadEvaluation() {
     source.value = 'empty'
   } finally {
     loading.value = false
-    await nextTick()
-    renderChart()
+    scheduleRenderChart()
   }
 }
 
@@ -227,24 +240,26 @@ async function handleCourseChanged(event) {
     : emptyEvaluation()
   source.value = localStorage.getItem('demoMode') === '1' ? 'demo' : 'empty'
   error.value = ''
-  await nextTick()
-  renderChart()
+  scheduleRenderChart()
   loadEvaluation()
 }
 
 onMounted(() => {
   nextTick(() => {
-    renderChart()
-    resizeObserver = new ResizeObserver(() => radar?.resize())
+    scheduleRenderChart()
+    resizeObserver = new ResizeObserver(scheduleRenderChart)
     if (radarEl.value) resizeObserver.observe(radarEl.value)
   })
   window.setTimeout(loadEvaluation, 120)
+  window.addEventListener('aptadapt:evaluation-visible', scheduleRenderChart)
   window.addEventListener('aptadapt:evaluation-refresh', loadEvaluation)
   window.addEventListener('aptadapt:course-changed', handleCourseChanged)
 })
 
 onBeforeUnmount(() => {
+  if (chartFrame) window.cancelAnimationFrame(chartFrame)
   resizeObserver?.disconnect()
+  window.removeEventListener('aptadapt:evaluation-visible', scheduleRenderChart)
   window.removeEventListener('aptadapt:evaluation-refresh', loadEvaluation)
   window.removeEventListener('aptadapt:course-changed', handleCourseChanged)
   radar?.dispose()

@@ -181,7 +181,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCourseStore } from '../stores/course'
 import { useUserStore } from '../stores/user'
@@ -291,6 +291,14 @@ const insights = computed(() => {
 const currentModule = computed(() =>
   navItems.value.find(item => item.key === activeModule.value) || navItems.value[0]
 )
+
+watch(activeModule, async value => {
+  if (value !== 'evaluation') return
+  await nextTick()
+  window.requestAnimationFrame(() => {
+    window.dispatchEvent(new CustomEvent('aptadapt:evaluation-visible'))
+  })
+})
 
 const displayName = computed(() => {
   if (userStore.profile?.name) return userStore.profile.name
